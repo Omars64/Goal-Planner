@@ -1,3 +1,14 @@
+[project]
+name = "goal-planner-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.116.1",
+    "uvicorn[standard]==0.35.0",
+    "pydantic==2.11.7",
+    "psycopg[binary]>=3.2.9,<4",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --disable-warnings --maxfail=1"
