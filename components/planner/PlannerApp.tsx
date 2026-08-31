@@ -231,8 +231,8 @@ export function PlannerApp() {
 
       <footer className="app-footer">
         <div><Image src={APP_ICON} alt="" width={24} height={24} unoptimized /><span>Goal Planner</span></div>
-        <span>{activePage.label} · Local-first personal planning</span>
-        <span>{online ? "Data saved by FastAPI + SQLite" : "Waiting for the API"}</span>
+        <span>{activePage.label} · Personal planning workspace</span>
+        <span>{online ? "Data synced by FastAPI" : "Waiting for the API"}</span>
       </footer>
 
       <div className={`mobile-nav-drawer ${mobileNavOpen ? "open" : ""}`} aria-hidden={!mobileNavOpen}>

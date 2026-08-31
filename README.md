@@ -1,6 +1,6 @@
 # Goal Planner
 
-Goal Planner is a full-stack daily and weekly planning workspace with a vivid neon visual direction. It combines a React 19 frontend built with Vite/Vinext and a FastAPI + SQLite backend.
+Goal Planner is a full-stack daily and weekly planning workspace with a vivid neon visual direction. It combines a React 19 frontend built with Vite/Vinext and a FastAPI backend using PostgreSQL in production and SQLite for local development.
 
 The included starter data is already tailored to an 8:00 AM–5:00 PM Sunday–Thursday engineering workday, including:
 
@@ -24,7 +24,7 @@ The project is ready to push to GitHub, test in pull requests, package as contai
 - **Reminders:** browser/in-app alerts, recurrence, pause, snooze, and desktop notification permission
 - **Insights:** 7/14/30-day charts, task completion, habit consistency, and review prompts
 - **Settings:** work profile, step goal, week start, compact layout, JSON backup/import, and starter reset
-- **Persistence:** normalized SQLite database managed by the Python API
+- **Persistence:** normalized PostgreSQL or SQLite database managed by the Python API
 - **Reliability:** error states, connectivity recovery, validation, destructive confirmations, and an error boundary
 - **Responsive UI:** desktop, tablet, and mobile navigation and layouts
 - **Keyboard navigation:** `Alt+1` through `Alt+9` opens the top-panel pages
@@ -35,7 +35,7 @@ The project is ready to push to GitHub, test in pull requests, package as contai
 | --- | --- |
 | Frontend | React 19, TypeScript, Vite 8 through Vinext, Shadcn/Radix primitives, Recharts |
 | Backend | Python 3.12, FastAPI, Pydantic |
-| Database | SQLite with WAL mode and indexed planner tables |
+| Database | PostgreSQL in production; SQLite with WAL mode for local development |
 | Tests | Node test runner, TypeScript, ESLint, Pytest, Ruff, coverage |
 | Delivery | Docker Compose, GitHub Actions CI, GHCR container publishing |
 

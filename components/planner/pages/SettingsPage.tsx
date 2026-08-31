@@ -133,7 +133,7 @@ export function SettingsPage({ onSettingsChanged }: { onSettingsChanged?: (setti
           <Panel className="system-status" title="System status">
             <div className="status-stack">
               <article><span className={apiHealthy ? "status-ok" : apiHealthy === false ? "status-bad" : "status-wait"}><Server /></span><div><strong>Python API</strong><small>{apiHealthy ? "Connected and healthy" : apiHealthy === false ? "Unavailable — start the backend" : "Checking connection…"}</small></div>{apiHealthy ? <CheckCircle2 /> : null}</article>
-              <article><span className="status-ok"><Database /></span><div><strong>SQLite database</strong><small>Persistent server-side planner records</small></div><CheckCircle2 /></article>
+              <article><span className="status-ok"><Database /></span><div><strong>Planner database</strong><small>Persistent server-side planner records</small></div><CheckCircle2 /></article>
               <article><span className="status-ok"><HardDrive /></span><div><strong>Portable backup</strong><small>JSON import and export supported</small></div><CheckCircle2 /></article>
               <article><span className={form.notifications_enabled ? "status-ok" : "status-wait"}><Bell /></span><div><strong>Reminder checks</strong><small>{form.notifications_enabled ? "Enabled" : "Disabled in planner settings"}</small></div></article>
             </div>
