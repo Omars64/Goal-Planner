@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.database import DatabaseConnection, database_url
+from app.database import DatabaseConnection, database_path, database_url
 
 
 class FakeCursor:
@@ -49,6 +49,12 @@ def test_database_url_prefers_standard_variable(monkeypatch) -> None:
     monkeypatch.setenv("POSTGRES_URL", "postgresql://fallback")
     monkeypatch.setenv("DATABASE_URL", "postgresql://primary")
     assert database_url() == "postgresql://primary"
+
+
+def test_database_path_uses_writable_serverless_storage(monkeypatch) -> None:
+    monkeypatch.delenv("VICE_PLANNER_DB_PATH", raising=False)
+    monkeypatch.setenv("VERCEL", "1")
+    assert database_path().as_posix() == "/tmp/goal_planner.db"
 
 
 def test_postgres_connection_adapts_queries_and_scripts() -> None:

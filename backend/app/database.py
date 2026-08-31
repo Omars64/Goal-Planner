@@ -18,11 +18,14 @@ except ImportError:  # Local SQLite development does not require the Postgres dr
     dict_row = None
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "vice_planner.db"
+SERVERLESS_DB_PATH = Path("/tmp/goal_planner.db")
 
 
 def database_path() -> Path:
     configured = os.getenv("VICE_PLANNER_DB_PATH")
-    return Path(configured).expanduser().resolve() if configured else DEFAULT_DB_PATH
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return SERVERLESS_DB_PATH if os.getenv("VERCEL") else DEFAULT_DB_PATH
 
 
 def database_url() -> str | None:
