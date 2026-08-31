@@ -16,9 +16,14 @@ import type {
   TaskInput,
 } from "./types";
 
-const inferredApiUrl = typeof window !== "undefined" && window.location.hostname === "terminal.local"
-  ? "/api"
-  : "http://localhost:8000/api";
+const localBackendHosts = new Set([
+  "localhost",
+  "127.0.0.1",
+  "omars64-goal-planner.omarsolanki35.chatgpt.site",
+]);
+const inferredApiUrl = typeof window !== "undefined" && localBackendHosts.has(window.location.hostname)
+  ? "http://localhost:8000/api"
+  : "/api";
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL || inferredApiUrl).replace(/\/$/, "");
 
 export class ApiError extends Error {

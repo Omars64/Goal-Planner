@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from typing import Any
@@ -12,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .database import (
+    DatabaseConnection,
     all_rows,
     connect,
     init_db,
@@ -131,7 +131,7 @@ def normalized_payload(model: BaseModel) -> dict[str, Any]:
     return payload
 
 
-def get_record(connection: sqlite3.Connection, table: str, record_id: str) -> dict[str, Any]:
+def get_record(connection: DatabaseConnection, table: str, record_id: str) -> dict[str, Any]:
     record = row_to_dict(connection.execute(f"SELECT * FROM {table} WHERE id = ?", (record_id,)).fetchone())
     if not record:
         raise HTTPException(status_code=404, detail=f"{table.rstrip('s').replace('_', ' ')} not found")
@@ -604,8 +604,11 @@ def import_data(payload: ImportRequest) -> dict[str, Any]:
                 if not row:
                     continue
                 columns = list(row)
+                updates = ", ".join(f"{column} = excluded.{column}" for column in columns if column != "id")
+                conflict_action = f"DO UPDATE SET {updates}" if updates else "DO NOTHING"
                 connection.execute(
-                    f"INSERT OR REPLACE INTO {table} ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
+                    f"INSERT INTO {table} ({', '.join(columns)}) VALUES "
+                    f"({', '.join('?' for _ in columns)}) ON CONFLICT(id) {conflict_action}",
                     tuple(row[column] for column in columns),
                 )
                 imported += 1

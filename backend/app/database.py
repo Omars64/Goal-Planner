@@ -10,12 +10,23 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:  # Local SQLite development does not require the Postgres driver.
+    psycopg = None
+    dict_row = None
+
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "vice_planner.db"
 
 
 def database_path() -> Path:
     configured = os.getenv("VICE_PLANNER_DB_PATH")
     return Path(configured).expanduser().resolve() if configured else DEFAULT_DB_PATH
+
+
+def database_url() -> str | None:
+    return os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
 
 
 def now_iso() -> str:
@@ -26,18 +37,70 @@ def new_id() -> str:
     return str(uuid.uuid4())
 
 
-def connect() -> sqlite3.Connection:
+class DatabaseConnection:
+    def __init__(self, raw_connection: Any, dialect: str) -> None:
+        self.raw_connection = raw_connection
+        self.dialect = dialect
+
+    @property
+    def is_postgres(self) -> bool:
+        return self.dialect == "postgres"
+
+    def _adapt_query(self, query: str) -> str:
+        return query.replace("?", "%s") if self.is_postgres else query
+
+    def execute(self, query: str, parameters: tuple[Any, ...] = ()) -> Any:
+        return self.raw_connection.execute(self._adapt_query(query), parameters)
+
+    def executemany(self, query: str, parameters: list[tuple[Any, ...]]) -> Any:
+        if not self.is_postgres:
+            return self.raw_connection.executemany(query, parameters)
+        with self.raw_connection.cursor() as cursor:
+            return cursor.executemany(self._adapt_query(query), parameters)
+
+    def executescript(self, script: str) -> None:
+        if not self.is_postgres:
+            self.raw_connection.executescript(script)
+            return
+        for statement in script.split(";"):
+            if statement.strip():
+                self.raw_connection.execute(statement)
+
+    def commit(self) -> None:
+        self.raw_connection.commit()
+
+    def rollback(self) -> None:
+        self.raw_connection.rollback()
+
+    def close(self) -> None:
+        self.raw_connection.close()
+
+    def __enter__(self) -> DatabaseConnection:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+
+def connect() -> DatabaseConnection:
+    url = database_url()
+    if url:
+        if psycopg is None or dict_row is None:
+            raise RuntimeError("DATABASE_URL is set, but psycopg is not installed")
+        connection = psycopg.connect(url, row_factory=dict_row, connect_timeout=10)
+        return DatabaseConnection(connection, "postgres")
+
     path = database_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, timeout=30, check_same_thread=False)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA journal_mode = WAL")
-    return connection
+    return DatabaseConnection(connection, "sqlite")
 
 
 @contextmanager
-def transaction() -> Iterator[sqlite3.Connection]:
+def transaction() -> Iterator[DatabaseConnection]:
     connection = connect()
     try:
         yield connection
@@ -158,13 +221,15 @@ CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(remind_at, enabled);
 
 def init_db() -> None:
     with transaction() as connection:
+        if connection.is_postgres:
+            connection.execute("SELECT pg_advisory_xact_lock(20260831)")
         connection.executescript(SCHEMA)
-        count = connection.execute("SELECT COUNT(*) FROM settings").fetchone()[0]
-        if count == 0:
+        row = connection.execute("SELECT COUNT(*) AS count FROM settings").fetchone()
+        if row["count"] == 0:
             seed_database(connection)
 
 
-def seed_database(connection: sqlite3.Connection) -> None:
+def seed_database(connection: DatabaseConnection) -> None:
     today = date.today()
     created = now_iso()
     settings: dict[str, Any] = {
@@ -325,7 +390,7 @@ def seed_database(connection: sqlite3.Connection) -> None:
     )
 
 
-def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
+def row_to_dict(row: Any | None) -> dict[str, Any] | None:
     if row is None:
         return None
     data = dict(row)
@@ -341,11 +406,11 @@ def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     return data
 
 
-def all_rows(connection: sqlite3.Connection, query: str, parameters: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
+def all_rows(connection: DatabaseConnection, query: str, parameters: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
     return [row_to_dict(row) or {} for row in connection.execute(query, parameters).fetchall()]
 
 
-def settings_dict(connection: sqlite3.Connection) -> dict[str, Any]:
+def settings_dict(connection: DatabaseConnection) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for row in connection.execute("SELECT key, value FROM settings ORDER BY key").fetchall():
         try:

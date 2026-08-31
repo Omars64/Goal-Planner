@@ -126,7 +126,7 @@ cd backend
 
 ## API and data
 
-The frontend reads `NEXT_PUBLIC_API_URL`; the default is `http://localhost:8000/api`. The backend accepts CORS origins from `VICE_PLANNER_CORS_ORIGINS` and stores data at `VICE_PLANNER_DB_PATH`.
+The frontend reads `NEXT_PUBLIC_API_URL`. Local development defaults to FastAPI at `http://localhost:8000/api`; Vercel uses the same-origin `/api` function automatically. The backend accepts CORS origins from `VICE_PLANNER_CORS_ORIGINS`. It uses managed Postgres when `DATABASE_URL` is present and falls back to SQLite at `VICE_PLANNER_DB_PATH` for local development.
 
 Important endpoint groups:
 
@@ -140,7 +140,7 @@ The Settings page can export and restore a portable JSON backup. Database files 
 
 ## CI/CD
 
-`.github/workflows/ci.yml` runs frontend linting, type checking, production build tests, backend linting, backend tests with an 85% coverage gate, and Docker image smoke builds.
+`.github/workflows/ci.yml` runs frontend linting, type checking, both Sites and Vercel production builds, backend linting, backend tests with an 85% coverage gate, and Docker image smoke builds. Vercel's GitHub integration deploys every branch and pull request as a preview and promotes successful pushes to `main` to production.
 
 `.github/workflows/publish-images.yml` publishes versioned frontend and API images to GitHub Container Registry when a tag such as `v1.0.0` is pushed. Define the repository variable `NEXT_PUBLIC_API_URL` before publishing the web image for production.
 
@@ -151,7 +151,17 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-## Deployment model
+## Vercel deployment
+
+The repository is ready to run as one Vercel project:
+
+1. Import the GitHub repository and keep `main` as the production branch.
+2. Add a Neon Postgres integration from the Vercel Marketplace to inject `DATABASE_URL`.
+3. Deploy. Next.js serves the frontend and `api/index.py` serves the FastAPI routes on the same domain.
+
+Schema creation and initial planner data are handled automatically on the first API request. Later pushes to GitHub create Vercel deployments without a local machine.
+
+## Container deployment
 
 Deploy the two containers to any Docker-compatible platform:
 
@@ -168,7 +178,8 @@ The app has no built-in multi-user authentication because it is designed as a pe
 ```text
 app/                       React app entry and global theme
 components/planner/        Planner shell, client, types, shared UI, and pages
-backend/app/                FastAPI application and SQLite access
+api/                        Vercel FastAPI entrypoint
+backend/app/                FastAPI application and SQLite/Postgres access
 backend/tests/              API regression suite
 public/                     App icon and web manifest
 scripts/                    Local startup and full-check scripts

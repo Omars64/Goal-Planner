@@ -29,6 +29,8 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - name: Verify Vercel production build
+        run: npm run build:vercel
 
   backend:
     name: Backend checks
