@@ -1,0 +1,186 @@
+from __future__ import annotations
+
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+Priority = Literal["low", "medium", "high", "urgent"]
+TaskStatus = Literal["todo", "in_progress", "done", "archived"]
+GoalStatus = Literal["active", "completed", "paused", "archived"]
+Recurrence = Literal["none", "daily", "weekdays", "weekly", "monthly"]
+
+
+class PatchModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class TaskCreate(PatchModel):
+    title: str = Field(min_length=1, max_length=180)
+    notes: str = Field(default="", max_length=4000)
+    status: TaskStatus = "todo"
+    priority: Priority = "medium"
+    category: str = Field(default="personal", max_length=60)
+    due_date: str | None = None
+    scheduled_date: str | None = None
+    estimate_minutes: int = Field(default=30, ge=0, le=1440)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+    recurring_rule: Recurrence = "none"
+
+
+class TaskUpdate(PatchModel):
+    title: str | None = Field(default=None, min_length=1, max_length=180)
+    notes: str | None = Field(default=None, max_length=4000)
+    status: TaskStatus | None = None
+    priority: Priority | None = None
+    category: str | None = Field(default=None, max_length=60)
+    due_date: str | None = None
+    scheduled_date: str | None = None
+    estimate_minutes: int | None = Field(default=None, ge=0, le=1440)
+    tags: list[str] | None = Field(default=None, max_length=20)
+    recurring_rule: Recurrence | None = None
+
+
+class RoutineBlockCreate(PatchModel):
+    title: str = Field(min_length=1, max_length=180)
+    days: list[str] = Field(min_length=1)
+    start_time: str
+    end_time: str
+    category: str = Field(default="work", max_length=60)
+    color: str = "#8b5cf6"
+    notes: str = Field(default="", max_length=2000)
+    is_movement: bool = False
+    is_active: bool = True
+
+    @model_validator(mode="after")
+    def validate_time_order(self) -> RoutineBlockCreate:
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time must be later than start_time")
+        return self
+
+
+class RoutineBlockUpdate(PatchModel):
+    title: str | None = Field(default=None, min_length=1, max_length=180)
+    days: list[str] | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    category: str | None = Field(default=None, max_length=60)
+    color: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
+    is_movement: bool | None = None
+    is_active: bool | None = None
+
+
+class EventCreate(PatchModel):
+    title: str = Field(min_length=1, max_length=180)
+    description: str = Field(default="", max_length=4000)
+    event_date: str
+    start_time: str
+    end_time: str
+    category: str = Field(default="personal", max_length=60)
+    color: str = "#ec4899"
+    location: str = Field(default="", max_length=180)
+    recurring_rule: Recurrence = "none"
+    completed: bool = False
+
+    @model_validator(mode="after")
+    def validate_time_order(self) -> EventCreate:
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time must be later than start_time")
+        return self
+
+
+class EventUpdate(PatchModel):
+    title: str | None = Field(default=None, min_length=1, max_length=180)
+    description: str | None = Field(default=None, max_length=4000)
+    event_date: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    category: str | None = Field(default=None, max_length=60)
+    color: str | None = None
+    location: str | None = Field(default=None, max_length=180)
+    recurring_rule: Recurrence | None = None
+    completed: bool | None = None
+
+
+class GoalCreate(PatchModel):
+    title: str = Field(min_length=1, max_length=180)
+    description: str = Field(default="", max_length=4000)
+    target_value: float = Field(default=1, gt=0)
+    current_value: float = Field(default=0, ge=0)
+    unit: str = Field(default="times", max_length=60)
+    deadline: str | None = None
+    status: GoalStatus = "active"
+    color: str = "#06b6d4"
+
+
+class GoalUpdate(PatchModel):
+    title: str | None = Field(default=None, min_length=1, max_length=180)
+    description: str | None = Field(default=None, max_length=4000)
+    target_value: float | None = Field(default=None, gt=0)
+    current_value: float | None = Field(default=None, ge=0)
+    unit: str | None = Field(default=None, max_length=60)
+    deadline: str | None = None
+    status: GoalStatus | None = None
+    color: str | None = None
+
+
+class HabitCreate(PatchModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=1000)
+    icon: str = Field(default="sparkles", max_length=60)
+    color: str = "#f97316"
+    target_days: list[str] = Field(default_factory=list)
+
+
+class HabitUpdate(PatchModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=1000)
+    icon: str | None = Field(default=None, max_length=60)
+    color: str | None = None
+    target_days: list[str] | None = None
+
+
+class HabitCheckIn(PatchModel):
+    entry_date: str
+    completed: bool = True
+    value: float = Field(default=1, ge=0)
+    note: str = Field(default="", max_length=500)
+
+
+class ReminderCreate(PatchModel):
+    title: str = Field(min_length=1, max_length=180)
+    body: str = Field(default="", max_length=1000)
+    remind_at: str
+    recurrence: Recurrence = "none"
+    enabled: bool = True
+    channel: Literal["browser", "in_app"] = "browser"
+    related_type: str | None = None
+    related_id: str | None = None
+
+
+class ReminderUpdate(PatchModel):
+    title: str | None = Field(default=None, min_length=1, max_length=180)
+    body: str | None = Field(default=None, max_length=1000)
+    remind_at: str | None = None
+    recurrence: Recurrence | None = None
+    enabled: bool | None = None
+    channel: Literal["browser", "in_app"] | None = None
+    related_type: str | None = None
+    related_id: str | None = None
+
+
+class SettingsUpdate(PatchModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=80)
+    timezone: str | None = None
+    week_start: Literal["sunday", "monday"] | None = None
+    daily_step_goal: int | None = Field(default=None, ge=1000, le=100000)
+    work_start: str | None = None
+    work_end: str | None = None
+    work_days: list[str] | None = None
+    compact_mode: bool | None = None
+    notifications_enabled: bool | None = None
+
+
+class ImportRequest(PatchModel):
+    mode: Literal["merge", "replace"] = "merge"
+    data: dict[str, Any]

@@ -1,0 +1,12 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --disable-warnings --maxfail=1"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]

@@ -1,0 +1,30 @@
+import type { Metadata } from "next";
+import type { Viewport } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "Vice Planner",
+  description: "A GTA VI-inspired daily and weekly command center for schedules, goals, habits, tasks, movement, and reminders.",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+  },
+  manifest: "/site.webmanifest",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#080713",
+  colorScheme: "dark",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" className="dark">
+      <body>{children}</body>
+    </html>
+  );
+}

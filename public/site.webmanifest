@@ -1,0 +1,16 @@
+{
+  "name": "Vice Planner",
+  "short_name": "Vice Planner",
+  "description": "Daily and weekly planning for schedules, tasks, goals, habits, movement, and reminders.",
+  "start_url": "/#dashboard",
+  "display": "standalone",
+  "background_color": "#080713",
+  "theme_color": "#f254a8",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "31x32",
+      "type": "image/x-icon"
+    }
+  ]
+}
