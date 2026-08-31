@@ -9,6 +9,9 @@ dependencies = [
     "psycopg[binary]>=3.2.9,<4",
 ]
 
+[tool.vercel]
+entrypoint = "app.main:app"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --disable-warnings --maxfail=1"
