@@ -8,9 +8,10 @@
   "theme_color": "#f254a8",
   "icons": [
     {
-      "src": "/favicon.ico",
-      "sizes": "31x32",
-      "type": "image/x-icon"
+      "src": "/goal-planner-icon.png",
+      "sizes": "1280x1280",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

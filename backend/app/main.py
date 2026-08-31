@@ -60,6 +60,7 @@ origins = [
         "VICE_PLANNER_CORS_ORIGINS",
         (
             "http://localhost:3000,http://localhost:4173,http://localhost:5173,"
+            "http://127.0.0.1:3000,http://127.0.0.1:4173,http://127.0.0.1:5173,"
             "http://terminal.local:4173,"
             "https://omars64-goal-planner.omarsolanki35.chatgpt.site"
         ),

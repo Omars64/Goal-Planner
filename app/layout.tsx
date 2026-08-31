@@ -6,8 +6,9 @@ export const metadata: Metadata = {
   title: "Goal Planner",
   description: "A focused daily and weekly command center for schedules, goals, habits, tasks, movement, and reminders.",
   icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
+    icon: [{ url: "/goal-planner-icon.png", type: "image/png", sizes: "1280x1280" }],
+    shortcut: "/goal-planner-icon.png",
+    apple: "/goal-planner-icon.png",
   },
   manifest: "/site.webmanifest",
 };

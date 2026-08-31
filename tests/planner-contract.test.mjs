@@ -19,9 +19,16 @@ test("ships backend, containers, CI workflows, and supplied icon", async () => {
     "../docker-compose.yml",
     "../.github/workflows/ci.yml",
     "../.github/workflows/publish-images.yml",
-    "../public/favicon.ico",
+    "../public/goal-planner-icon.png",
   ];
   await Promise.all(files.map((path) => access(new URL(path, import.meta.url))));
+});
+
+test("uses consistent Goal Planner branding in the shared shell", async () => {
+  const source = await readFile(new URL("../components/planner/PlannerApp.tsx", import.meta.url), "utf8");
+  assert.match(source, /goal-planner-icon\.png/);
+  assert.match(source, /<strong>GOAL<\/strong><span>PLANNER<\/span>/);
+  assert.doesNotMatch(source, /<b>06<\/b>/);
 });
 
 test("uses the configured FastAPI endpoint and durable API resources", async () => {

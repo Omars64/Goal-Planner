@@ -16,18 +16,23 @@ def test_health_and_seeded_dashboard(client):
     assert "metrics" in body
 
 
-def test_hosted_frontend_origin_is_allowed(client):
-    origin = "https://omars64-goal-planner.omarsolanki35.chatgpt.site"
-    response = client.options(
-        "/api/health",
-        headers={
-            "Origin": origin,
-            "Access-Control-Request-Method": "GET",
-        },
-    )
+def test_frontend_origins_are_allowed(client):
+    origins = [
+        "http://127.0.0.1:5173",
+        "https://omars64-goal-planner.omarsolanki35.chatgpt.site",
+    ]
 
-    assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == origin
+    for origin in origins:
+        response = client.options(
+            "/api/health",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin
 
 
 def test_task_crud_and_completion(client):

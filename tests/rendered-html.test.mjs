@@ -29,6 +29,6 @@ test("renders Goal Planner metadata and app shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>Goal Planner<\/title>/i);
   assert.match(html, /daily and weekly command center/i);
-  assert.match(html, /favicon\.ico/i);
+  assert.match(html, /goal-planner-icon\.png/i);
   assert.doesNotMatch(html, /Starter Project/i);
 });

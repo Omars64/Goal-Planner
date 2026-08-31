@@ -36,16 +36,18 @@ import { TodosPage } from "./pages/TodosPage";
 import type { PageKey, PlannerSettings, Reminder } from "./types";
 
 
-const NAVIGATION: Array<{ key: PageKey; label: string; shortLabel: string; icon: typeof CircleGauge }> = [
-  { key: "dashboard", label: "Overview", shortLabel: "Home", icon: CircleGauge },
-  { key: "timetable", label: "Time table", shortLabel: "Time", icon: CalendarClock },
-  { key: "schedule", label: "Schedule", shortLabel: "Week", icon: CalendarDays },
-  { key: "todos", label: "To-do", shortLabel: "Tasks", icon: CheckSquare2 },
-  { key: "goals", label: "Goals", shortLabel: "Goals", icon: Goal },
-  { key: "habits", label: "Habits", shortLabel: "Habits", icon: HeartPulse },
-  { key: "reminders", label: "Reminders", shortLabel: "Alerts", icon: Bell },
-  { key: "insights", label: "Insights", shortLabel: "Stats", icon: BarChart3 },
-  { key: "settings", label: "Settings", shortLabel: "Setup", icon: Settings2 },
+const APP_ICON = "/goal-planner-icon.png";
+
+const NAVIGATION: Array<{ key: PageKey; label: string; icon: typeof CircleGauge }> = [
+  { key: "dashboard", label: "Overview", icon: CircleGauge },
+  { key: "timetable", label: "Time table", icon: CalendarClock },
+  { key: "schedule", label: "Schedule", icon: CalendarDays },
+  { key: "todos", label: "To-do", icon: CheckSquare2 },
+  { key: "goals", label: "Goals", icon: Goal },
+  { key: "habits", label: "Habits", icon: HeartPulse },
+  { key: "reminders", label: "Reminders", icon: Bell },
+  { key: "insights", label: "Insights", icon: BarChart3 },
+  { key: "settings", label: "Settings", icon: Settings2 },
 ];
 
 function pageFromHash(): PageKey {
@@ -159,7 +161,7 @@ export function PlannerApp() {
           window.localStorage.setItem(key, "shown");
           toast.info(reminder.title, { description: reminder.body || formatDateTime(reminder.remind_at), duration: 12_000 });
           if (reminder.channel === "browser" && "Notification" in window && Notification.permission === "granted") {
-            new Notification(reminder.title, { body: reminder.body, icon: "/favicon.ico" });
+            new Notification(reminder.title, { body: reminder.body, icon: APP_ICON });
           }
           const next = nextReminderDate(reminder);
           if (next) await api.updateReminder(reminder.id, { remind_at: next });
@@ -194,9 +196,8 @@ export function PlannerApp() {
       <div className="ambient ambient-two" />
       <header className="app-header">
         <div className="brand-lockup">
-          <Image src="/favicon.ico" alt="" width={32} height={32} unoptimized />
+          <Image src={APP_ICON} alt="" width={42} height={42} unoptimized />
           <div><strong>GOAL</strong><span>PLANNER</span></div>
-          <b>06</b>
         </div>
         <button className="mobile-menu-button" aria-label="Open page menu" onClick={() => setMobileNavOpen(true)}><Menu /></button>
         <nav className="top-navigation" aria-label="Planner pages">
@@ -229,7 +230,7 @@ export function PlannerApp() {
       </main>
 
       <footer className="app-footer">
-        <div><Image src="/favicon.ico" alt="" width={20} height={20} unoptimized /><span>Goal Planner</span></div>
+        <div><Image src={APP_ICON} alt="" width={24} height={24} unoptimized /><span>Goal Planner</span></div>
         <span>{activePage.label} · Local-first personal planning</span>
         <span>{online ? "Data saved by FastAPI + SQLite" : "Waiting for the API"}</span>
       </footer>
@@ -237,7 +238,7 @@ export function PlannerApp() {
       <div className={`mobile-nav-drawer ${mobileNavOpen ? "open" : ""}`} aria-hidden={!mobileNavOpen}>
         <button className="mobile-nav-backdrop" aria-label="Close page menu" onClick={() => setMobileNavOpen(false)} />
         <aside>
-          <header><div className="brand-lockup"><Image src="/favicon.ico" alt="" width={28} height={28} unoptimized /><div><strong>GOAL</strong><span>PLANNER</span></div></div><button aria-label="Close page menu" onClick={() => setMobileNavOpen(false)}><X /></button></header>
+          <header><div className="brand-lockup"><Image src={APP_ICON} alt="" width={38} height={38} unoptimized /><div><strong>GOAL</strong><span>PLANNER</span></div></div><button aria-label="Close page menu" onClick={() => setMobileNavOpen(false)}><X /></button></header>
           <nav aria-label="Mobile planner pages">
             {NAVIGATION.map((item) => { const Icon = item.icon; return <button key={item.key} className={page === item.key ? "active" : ""} onClick={() => navigate(item.key)}><Icon /><span>{item.label}</span></button>; })}
           </nav>
