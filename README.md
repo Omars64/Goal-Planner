@@ -153,11 +153,12 @@ git push origin v1.0.0
 
 ## Vercel deployment
 
-The repository is ready to run as one Vercel project:
+The repository deploys as two Vercel projects connected to the same GitHub repository:
 
-1. Import the GitHub repository and keep `main` as the production branch.
-2. Add a Neon Postgres integration from the Vercel Marketplace to inject `DATABASE_URL`.
-3. Deploy. Next.js serves the frontend and `api/index.py` serves the FastAPI routes on the same domain.
+1. Import `backend/` as `goal-planner-api` and keep `main` as the production branch.
+2. Add a Neon Postgres integration to the API project so it injects `DATABASE_URL`.
+3. Import the repository root as `goal-planner` and set `NEXT_PUBLIC_API_URL` to the API project's `/api` URL.
+4. Deploy both projects. Vercel automatically builds each project when `main` changes.
 
 Schema creation and initial planner data are handled automatically on the first API request. Later pushes to GitHub create Vercel deployments without a local machine.
 
@@ -178,7 +179,6 @@ The app has no built-in multi-user authentication because it is designed as a pe
 ```text
 app/                       React app entry and global theme
 components/planner/        Planner shell, client, types, shared UI, and pages
-api/                        Vercel FastAPI entrypoint
 backend/app/                FastAPI application and SQLite/Postgres access
 backend/tests/              API regression suite
 public/                     App icon and web manifest
