@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "npm run build:vercel"
+  "buildCommand": "npm run build:vercel",
+  "functions": {
+    "api/**/*.py": {
+      "excludeFiles": "{.git/**,.next/**,.openai/**,.sites-runtime/**,.wrangler/**,app/**,build/**,components/**,db/**,dist/**,drizzle/**,examples/**,hooks/**,lib/**,node_modules/**,public/**,scripts/**,tests/**,types/**,vendor/**,work/**,worker/**,backend/.venv/**,backend/data/**,backend/tests/**,**/__pycache__/**}"
+    }
+  }
 }
