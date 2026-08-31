@@ -4,7 +4,7 @@
   "buildCommand": "npm run build:vercel",
   "functions": {
     "api/**/*.py": {
-      "excludeFiles": "{.git/**,.next/**,.openai/**,.sites-runtime/**,.wrangler/**,app/**,build/**,components/**,db/**,dist/**,drizzle/**,examples/**,hooks/**,lib/**,node_modules/**,public/**,scripts/**,tests/**,types/**,vendor/**,work/**,worker/**,backend/.venv/**,backend/data/**,backend/tests/**,**/__pycache__/**}"
+      "excludeFiles": "{node_modules/**,.next/**,public/**,app/**,components/**,dist/**,build/**,vendor/**,backend/.venv/**,backend/tests/**,backend/data/**,tests/**,.git/**}"
     }
   }
 }
