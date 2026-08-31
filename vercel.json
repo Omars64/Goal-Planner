@@ -3,8 +3,8 @@
   "framework": "nextjs",
   "buildCommand": "npm run build:vercel",
   "functions": {
-    "api/**/*.py": {
-      "excludeFiles": "{node_modules/**,.next/**,public/**,app/**,components/**,dist/**,build/**,vendor/**,backend/.venv/**,backend/tests/**,backend/data/**,tests/**,.git/**}"
+    "api/index.py": {
+      "excludeFiles": "{.next,node_modules,public,app,components,dist,build,vendor,tests,backend/.venv,backend/tests,backend/data}/**"
     }
   }
 }
