@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "npm run build:vercel"
+  "buildCommand": "npm run build:vercel",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://goal-planner-api.vercel.app/api/:path*"
+    }
+  ]
 }

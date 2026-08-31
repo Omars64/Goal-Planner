@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "fastapi",
-  "buildCommand": "python -m compileall -q app"
+  "buildCommand": "python -m compileall -q app",
+  "regions": ["iad1"]
 }
