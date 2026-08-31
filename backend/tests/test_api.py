@@ -16,6 +16,20 @@ def test_health_and_seeded_dashboard(client):
     assert "metrics" in body
 
 
+def test_hosted_frontend_origin_is_allowed(client):
+    origin = "https://omars64-goal-planner.omarsolanki35.chatgpt.site"
+    response = client.options(
+        "/api/health",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+
+
 def test_task_crud_and_completion(client):
     created = client.post(
         "/api/tasks",

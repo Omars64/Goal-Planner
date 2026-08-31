@@ -58,7 +58,11 @@ origins = [
     item.strip()
     for item in os.getenv(
         "VICE_PLANNER_CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:4173,http://localhost:5173,http://terminal.local:4173",
+        (
+            "http://localhost:3000,http://localhost:4173,http://localhost:5173,"
+            "http://terminal.local:4173,"
+            "https://omars64-goal-planner.omarsolanki35.chatgpt.site"
+        ),
     ).split(",")
     if item.strip()
 ]
