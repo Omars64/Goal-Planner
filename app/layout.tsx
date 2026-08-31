@@ -3,8 +3,8 @@ import type { Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vice Planner",
-  description: "A GTA VI-inspired daily and weekly command center for schedules, goals, habits, tasks, movement, and reminders.",
+  title: "Goal Planner",
+  description: "A focused daily and weekly command center for schedules, goals, habits, tasks, movement, and reminders.",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",

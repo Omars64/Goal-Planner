@@ -1,1 +1,1 @@
-"""Vice Planner API package."""
+"""Goal Planner API package."""

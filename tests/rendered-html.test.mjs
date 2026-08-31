@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-test("renders Vice Planner metadata and app shell", async () => {
+test("renders Goal Planner metadata and app shell", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
@@ -27,7 +27,7 @@ test("renders Vice Planner metadata and app shell", async () => {
     /^text\/html\b/i,
   );
   const html = await response.text();
-  assert.match(html, /<title>Vice Planner<\/title>/i);
+  assert.match(html, /<title>Goal Planner<\/title>/i);
   assert.match(html, /daily and weekly command center/i);
   assert.match(html, /favicon\.ico/i);
   assert.doesNotMatch(html, /Starter Project/i);

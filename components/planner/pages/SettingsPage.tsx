@@ -62,7 +62,7 @@ export function SettingsPage({ onSettingsChanged }: { onSettingsChanged?: (setti
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `vice-planner-backup-${todayISO()}.json`;
+      link.download = `goal-planner-backup-${todayISO()}.json`;
       link.click();
       URL.revokeObjectURL(url);
       toast.success("Planner backup downloaded");

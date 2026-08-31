@@ -48,7 +48,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Vice Planner API",
+    title="Goal Planner API",
     description="Persistent daily and weekly planner backend.",
     version="1.0.0",
     lifespan=lifespan,
@@ -179,14 +179,14 @@ def delete_record(table: str, record_id: str) -> Response:
 
 @app.get("/")
 def root() -> dict[str, str]:
-    return {"name": "Vice Planner API", "docs": "/docs", "health": "/api/health"}
+    return {"name": "Goal Planner API", "docs": "/docs", "health": "/api/health"}
 
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
     with connect() as connection:
         connection.execute("SELECT 1").fetchone()
-    return {"status": "healthy", "service": "vice-planner-api", "version": "1.0.0"}
+    return {"status": "healthy", "service": "goal-planner-api", "version": "1.0.0"}
 
 
 @app.get("/api/settings")

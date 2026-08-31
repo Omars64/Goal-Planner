@@ -195,7 +195,7 @@ export function PlannerApp() {
       <header className="app-header">
         <div className="brand-lockup">
           <Image src="/favicon.ico" alt="" width={32} height={32} unoptimized />
-          <div><strong>VICE</strong><span>PLANNER</span></div>
+          <div><strong>GOAL</strong><span>PLANNER</span></div>
           <b>06</b>
         </div>
         <button className="mobile-menu-button" aria-label="Open page menu" onClick={() => setMobileNavOpen(true)}><Menu /></button>
@@ -229,7 +229,7 @@ export function PlannerApp() {
       </main>
 
       <footer className="app-footer">
-        <div><Image src="/favicon.ico" alt="" width={20} height={20} unoptimized /><span>Vice Planner</span></div>
+        <div><Image src="/favicon.ico" alt="" width={20} height={20} unoptimized /><span>Goal Planner</span></div>
         <span>{activePage.label} · Local-first personal planning</span>
         <span>{online ? "Data saved by FastAPI + SQLite" : "Waiting for the API"}</span>
       </footer>
@@ -237,7 +237,7 @@ export function PlannerApp() {
       <div className={`mobile-nav-drawer ${mobileNavOpen ? "open" : ""}`} aria-hidden={!mobileNavOpen}>
         <button className="mobile-nav-backdrop" aria-label="Close page menu" onClick={() => setMobileNavOpen(false)} />
         <aside>
-          <header><div className="brand-lockup"><Image src="/favicon.ico" alt="" width={28} height={28} unoptimized /><div><strong>VICE</strong><span>PLANNER</span></div></div><button aria-label="Close page menu" onClick={() => setMobileNavOpen(false)}><X /></button></header>
+          <header><div className="brand-lockup"><Image src="/favicon.ico" alt="" width={28} height={28} unoptimized /><div><strong>GOAL</strong><span>PLANNER</span></div></div><button aria-label="Close page menu" onClick={() => setMobileNavOpen(false)}><X /></button></header>
           <nav aria-label="Mobile planner pages">
             {NAVIGATION.map((item) => { const Icon = item.icon; return <button key={item.key} className={page === item.key ? "active" : ""} onClick={() => navigate(item.key)}><Icon /><span>{item.label}</span></button>; })}
           </nav>

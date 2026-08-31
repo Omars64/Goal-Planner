@@ -1,6 +1,6 @@
-# Vice Planner
+# Goal Planner
 
-Vice Planner is a full-stack daily and weekly planning workspace with a neon, GTA VI-inspired visual direction. It combines a React 19 frontend built with Vite/Vinext and a FastAPI + SQLite backend.
+Goal Planner is a full-stack daily and weekly planning workspace with a vivid neon visual direction. It combines a React 19 frontend built with Vite/Vinext and a FastAPI + SQLite backend.
 
 The included starter data is already tailored to an 8:00 AM–5:00 PM Sunday–Thursday engineering workday, including:
 
