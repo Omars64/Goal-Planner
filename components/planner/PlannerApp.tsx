@@ -28,6 +28,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { api } from "./api";
 import { AuthScreen } from "./AuthScreen";
 import { formatDateTime } from "./date";
+import { ProfileAvatar } from "./ProfileAvatar";
 import { DashboardPage } from "./pages/DashboardPage";
 import { GoalsPage } from "./pages/GoalsPage";
 import { HabitsPage } from "./pages/HabitsPage";
@@ -112,6 +113,15 @@ export function PlannerApp() {
     ? [...BASE_NAVIGATION.slice(0, -1), { key: "admin" as const, label: "Admin", icon: ShieldCheck }, BASE_NAVIGATION.at(-1)!]
     : BASE_NAVIGATION, [user?.role]);
   const activePage = navigation.find((item) => item.key === page) || navigation[0];
+  const profileImage = settings?.profile_image ?? user?.profile_image;
+  const appBackground = settings?.background_image
+    ? {
+        backgroundImage: `linear-gradient(rgba(8,7,19,.78), rgba(8,7,19,.9)), url("${settings.background_image}")`,
+        backgroundPosition: "center",
+        backgroundSize: "cover",
+        backgroundAttachment: "fixed",
+      }
+    : undefined;
 
   const navigate = (target: PageKey) => {
     setPage(target);
@@ -240,7 +250,7 @@ export function PlannerApp() {
   }
 
   return (
-    <div className={`vice-app ${settings?.compact_mode ? "compact-mode" : ""}`}>
+    <div className={`vice-app ${settings?.compact_mode ? "compact-mode" : ""}`} style={appBackground}>
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <header className="app-header">
@@ -265,7 +275,7 @@ export function PlannerApp() {
           })}
         </nav>
         <div className="header-tools">
-          <div className="account-chip" title={`${user.username} · ${user.role}`}><span>{user.username.slice(0, 2).toUpperCase()}</span><div><strong>{user.username}</strong><small>{user.role}</small></div></div>
+          <div className="account-chip" title={`${user.username} · ${user.role}`}><ProfileAvatar name={user.username} image={profileImage} /><div><strong>{user.username}</strong><small>{user.role}</small></div></div>
           <div className={`connection-status ${online ? "is-online" : online === false ? "is-offline" : ""}`} title={online ? "Python backend connected" : "Python backend unavailable"}>
             {online ? <Wifi /> : <CloudOff />}<span>{online ? "Synced" : online === false ? "Offline" : "Checking"}</span>
           </div>
@@ -295,7 +305,7 @@ export function PlannerApp() {
           <nav aria-label="Mobile planner pages">
             {navigation.map((item) => { const Icon = item.icon; return <button key={item.key} className={page === item.key ? "active" : ""} onClick={() => navigate(item.key)}><Icon /><span>{item.label}</span></button>; })}
           </nav>
-          <div className="mobile-account"><div><strong>{user.username}</strong><small>{user.email}</small></div><Button variant="outline" onClick={() => void logout()}><LogOut />Sign out</Button></div>
+          <div className="mobile-account"><ProfileAvatar name={user.username} image={profileImage} /><div><strong>{user.username}</strong><small>{user.email}</small></div><Button variant="outline" onClick={() => void logout()}><LogOut />Sign out</Button></div>
         </aside>
       </div>
 

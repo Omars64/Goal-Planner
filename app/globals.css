@@ -119,7 +119,10 @@ button:disabled { cursor: not-allowed; }
 .mobile-menu-button { display: none; border: 0; background: transparent; color: white; }
 .header-tools { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .account-chip { display: flex; align-items: center; gap: 8px; max-width: 180px; }
-.account-chip > span { width: 36px; height: 36px; display: grid; flex: 0 0 auto; place-items: center; color: white; border: 1px solid rgba(242,84,168,.38); border-radius: 8px; background: rgba(242,84,168,.12); font-size: 12px; font-weight: 900; }
+.profile-avatar { overflow: hidden; flex: 0 0 auto; color: white; border: 1px solid rgba(242,84,168,.38); border-radius: 8px; background: rgba(242,84,168,.12); font-size: 12px; font-weight: 900; }
+.profile-avatar [data-slot="avatar-image"] { object-fit: cover; }
+.profile-avatar [data-slot="avatar-fallback"] { color: white; border-radius: 7px; background: rgba(242,84,168,.12); font-weight: 900; }
+.account-chip > .profile-avatar { width: 36px; height: 36px; }
 .account-chip div { min-width: 0; display: flex; flex-direction: column; }
 .account-chip strong, .account-chip small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-chip strong { font-size: 12px; }
@@ -553,9 +556,14 @@ button:disabled { cursor: not-allowed; }
 .verification-actions button { display: inline-flex; align-items: center; gap: 5px; color: #a9a5ba; border: 0; background: transparent; font-size: 12px; }
 .verification-actions button:hover { color: #ff76b8; }
 .verification-actions svg { width: 14px; }
+.auth-access-message { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; padding: 12px; color: #ffd5dc; border: 1px solid rgba(255,105,125,.34); border-radius: 7px; background: rgba(103,20,38,.5); }
+.auth-access-message > svg { width: 19px; flex: 0 0 auto; margin-top: 1px; color: #ff7185; }
+.auth-access-message > div { display: flex; flex-direction: column; gap: 3px; }
+.auth-access-message strong { font-size: 13px; }
+.auth-access-message span { color: #d6aeb8; font-size: 12px; line-height: 1.45; }
 .auth-footnote { margin: 0; color: #676375; font-size: 12px; }
 
-.admin-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.admin-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .admin-metrics .vice-panel { display: flex; align-items: center; gap: 13px; padding: 16px; border-radius: 8px; }
 .admin-metrics .vice-panel > span { width: 40px; height: 40px; display: grid; place-items: center; color: #ff76b8; border-radius: 7px; background: rgba(242,84,168,.09); }
 .admin-metrics svg { width: 19px; }
@@ -564,15 +572,19 @@ button:disabled { cursor: not-allowed; }
 .admin-metrics strong { font-size: 24px; }
 .admin-user-list { display: grid; gap: 10px; }
 .admin-user-card { display: grid; grid-template-columns: auto minmax(190px, 1.25fr) minmax(300px, 1fr) auto; align-items: center; gap: 16px; padding: 16px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: rgba(17,15,32,.86); }
-.user-avatar { width: 44px; height: 44px; display: grid; place-items: center; color: white; border: 1px solid rgba(242,84,168,.38); border-radius: 8px; background: rgba(242,84,168,.12); font-size: 13px; font-weight: 900; }
+.admin-user-card.is-inactive { border-color: rgba(255,113,133,.2); background: rgba(24,14,28,.78); }
+.admin-user-card.is-inactive .user-primary h2, .admin-user-card.is-inactive dl { opacity: .72; }
+.user-avatar { width: 44px; height: 44px; font-size: 13px; }
 .user-primary { min-width: 0; }
 .user-primary > div { display: flex; align-items: center; gap: 7px; }
 .user-primary h2 { overflow: hidden; margin: 0; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 .user-primary a { display: block; overflow: hidden; margin-top: 4px; color: #918da1; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.role-pill, .you-pill { padding: 3px 6px; border-radius: 5px; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.role-pill, .you-pill, .status-pill { padding: 3px 6px; border-radius: 5px; font-size: 10px; font-weight: 900; text-transform: uppercase; }
 .role-pill { color: #c9c5d7; background: rgba(255,255,255,.07); }
 .role-admin { color: #ff91c7; background: rgba(242,84,168,.11); }
 .you-pill { color: #67e99a; background: rgba(51,209,122,.09); }
+.status-active { color: #67e99a; background: rgba(51,209,122,.09); }
+.status-inactive { color: #ff91a0; background: rgba(255,80,104,.1); }
 .admin-user-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 0; }
 .admin-user-card dl div { min-width: 0; }
 .admin-user-card dt { color: #686477; font-size: 10px; font-weight: 800; text-transform: uppercase; }
@@ -582,9 +594,21 @@ button:disabled { cursor: not-allowed; }
 .admin-active-switch { display: flex; align-items: center; gap: 11px; padding: 12px; border: 1px solid rgba(255,255,255,.09); border-radius: 8px; background: rgba(255,255,255,.02); }
 .admin-active-switch > span { display: flex; flex-direction: column; }
 .admin-active-switch small { color: #777387; font-size: 12px; }
+.settings-appearance { grid-column: 1 / -1; }
+.appearance-grid { display: grid; grid-template-columns: .8fr 1.2fr; gap: 24px; }
+.appearance-grid > section { display: grid; grid-template-columns: auto minmax(130px, 1fr) auto; align-items: center; gap: 14px; min-width: 0; }
+.appearance-grid > section + section { padding-left: 24px; border-left: 1px solid rgba(255,255,255,.09); }
+.appearance-grid section > div:not(.background-preview):not(.appearance-actions) { display: flex; flex-direction: column; min-width: 0; }
+.appearance-grid strong { font-size: 14px; }
+.appearance-grid small { margin-top: 3px; color: #817d90; font-size: 11px; }
+.appearance-avatar { width: 72px; height: 72px; font-size: 18px; }
+.background-preview { width: 128px; height: 72px; display: grid; place-items: center; color: #777387; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; background-color: #111020; background-position: center; background-size: cover; }
+.background-preview svg { width: 25px; }
+.appearance-actions { display: flex; gap: 7px; }
+.appearance-actions button { white-space: nowrap; }
 .settings-account { grid-column: 2; }
 .account-summary { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin-bottom: 18px; }
-.account-summary > span { width: 42px; height: 42px; display: grid; place-items: center; color: white; border-radius: 8px; background: rgba(242,84,168,.13); font-weight: 900; }
+.account-summary > .profile-avatar { width: 42px; height: 42px; }
 .account-summary > div { min-width: 0; display: flex; flex-direction: column; }
 .account-summary small { overflow: hidden; color: #817d90; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .account-summary em { padding: 4px 7px; color: #ff91c7; border-radius: 5px; background: rgba(242,84,168,.1); font-size: 10px; font-style: normal; font-weight: 900; text-transform: uppercase; }
@@ -614,6 +638,8 @@ button:disabled { cursor: not-allowed; }
   .page-heading { align-items: flex-start; flex-direction: column; gap: 16px; }
   .page-actions { justify-content: flex-start; width: 100%; }
   .dashboard-grid, .insights-layout, .settings-layout { grid-template-columns: 1fr; }
+  .appearance-grid { grid-template-columns: 1fr; }
+  .appearance-grid > section + section { padding-top: 18px; padding-left: 0; border-top: 1px solid rgba(255,255,255,.09); border-left: 0; }
   .settings-profile { grid-row: auto; }
   .settings-account { grid-column: auto; }
   .admin-user-card { grid-template-columns: auto 1fr auto; }
@@ -641,7 +667,7 @@ button:disabled { cursor: not-allowed; }
   .mobile-nav-drawer nav button.active { color: white; border-color: var(--vice-pink); background: rgba(242,84,168,.08); }
   .mobile-nav-drawer nav svg { width: 18px; }
   .mobile-account { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.08); }
-  .mobile-account > div { display: flex; flex-direction: column; min-width: 0; }
+  .mobile-account > div:not(.profile-avatar) { display: flex; flex-direction: column; min-width: 0; }
   .mobile-account small { overflow: hidden; color: #777387; font-size: 11px; text-overflow: ellipsis; }
 }
 
@@ -658,6 +684,9 @@ button:disabled { cursor: not-allowed; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .habit-quick-list { grid-template-columns: 1fr; }
   .two-columns, .three-columns, .form-switches { grid-template-columns: 1fr; }
+  .appearance-grid > section { grid-template-columns: auto minmax(0, 1fr); }
+  .appearance-actions { grid-column: 1 / -1; }
+  .appearance-actions button { flex: 1; min-width: 0; }
   .admin-metrics { grid-template-columns: 1fr; }
   .admin-user-card { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
   .admin-user-card dl { grid-column: 1 / -1; }

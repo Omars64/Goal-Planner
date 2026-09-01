@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { ArrowLeft, Eye, EyeOff, LoaderCircle, LockKeyhole, LogIn, MailCheck, UserPlus } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, LoaderCircle, LockKeyhole, LogIn, MailCheck, UserPlus, UserX } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
 
@@ -53,10 +53,12 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUs
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [accessMessage, setAccessMessage] = useState<string | null>(null);
 
   const submitCredentials = async (event: FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
+    setAccessMessage(null);
     try {
       if (mode === "login") {
         const result = await api.login(email, password);
@@ -68,8 +70,11 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUs
         toast.success("Verification code sent", { description: result.message });
       }
     } catch (caught) {
-      toast.error(mode === "login" ? "Sign in failed" : "Could not create account", {
-        description: caught instanceof Error ? caught.message : "Please try again",
+      const message = caught instanceof Error ? caught.message : "Please try again";
+      const deactivated = /deactivated|inactive/i.test(message);
+      if (deactivated) setAccessMessage(message);
+      toast.error(deactivated ? "Account access is disabled" : mode === "login" ? "Sign in failed" : "Could not create account", {
+        description: message,
       });
     } finally {
       setSubmitting(false);
@@ -131,9 +136,10 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUs
           <>
             <div className="auth-heading"><span><LockKeyhole /></span><p>Your planning workspace</p><h1>{mode === "login" ? "Welcome back" : "Create your account"}</h1><small>{mode === "login" ? "Sign in to continue where you left off." : "Verify your email, then start planning with your own private workspace."}</small></div>
             <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
-              <button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}><LogIn />Log in</button>
-              <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}><UserPlus />Sign up</button>
+              <button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setAccessMessage(null); }}><LogIn />Log in</button>
+              <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "active" : ""} onClick={() => { setMode("signup"); setAccessMessage(null); }}><UserPlus />Sign up</button>
             </div>
+            {accessMessage ? <div className="auth-access-message" role="alert" aria-live="polite"><UserX /><div><strong>Account unavailable</strong><span>{accessMessage}</span></div></div> : null}
             <form className="auth-form" onSubmit={submitCredentials}>
               {mode === "signup" ? <Field label="Username"><Input required minLength={2} maxLength={80} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="How your name should appear" autoComplete="name" /></Field> : null}
               <Field label="Email address"><Input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="email" /></Field>

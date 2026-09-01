@@ -129,10 +129,25 @@ def test_reminder_and_settings(client):
     toggled = client.patch(f"/api/reminders/{reminder.json()['id']}", json={"enabled": False})
     assert toggled.json()["enabled"] is False
 
-    settings = client.patch("/api/settings", json={"daily_step_goal": 8500, "compact_mode": True})
+    profile_image = "data:image/png;base64,aGVsbG8="
+    background_image = "data:image/jpeg;base64,d29ybGQ="
+    settings = client.patch(
+        "/api/settings",
+        json={
+            "daily_step_goal": 8500,
+            "compact_mode": True,
+            "profile_image": profile_image,
+            "background_image": background_image,
+        },
+    )
     assert settings.status_code == 200
     assert settings.json()["daily_step_goal"] == 8500
     assert settings.json()["compact_mode"] is True
+    assert settings.json()["profile_image"] == profile_image
+    assert settings.json()["background_image"] == background_image
+    assert (
+        client.patch("/api/settings", json={"profile_image": "data:image/svg+xml;base64,aGVsbG8="}).status_code == 422
+    )
 
 
 def test_export_import_round_trip(client):

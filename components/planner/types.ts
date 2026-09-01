@@ -21,6 +21,7 @@ export interface AuthUser {
   email_verified: boolean;
   created_at: string;
   last_login_at: string | null;
+  profile_image: string | null;
 }
 
 export interface AdminUsersResponse {
@@ -28,6 +29,8 @@ export interface AdminUsersResponse {
   total: number;
   admins: number;
   regular_users: number;
+  active_users: number;
+  inactive_users: number;
 }
 
 export type Priority = "low" | "medium" | "high" | "urgent";
@@ -139,6 +142,8 @@ export interface PlannerSettings {
   work_days: string[];
   compact_mode: boolean;
   notifications_enabled: boolean;
+  profile_image: string | null;
+  background_image: string | null;
 }
 
 export interface DashboardData {

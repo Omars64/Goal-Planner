@@ -23,6 +23,19 @@ test("ships verified authentication and role-gated administration", async () => 
   assert.match(api, /httponly=True/);
 });
 
+test("keeps inactive accounts manageable and supports personal images", async () => {
+  const app = await readFile(new URL("../components/planner/PlannerApp.tsx", import.meta.url), "utf8");
+  const auth = await readFile(new URL("../components/planner/AuthScreen.tsx", import.meta.url), "utf8");
+  const admin = await readFile(new URL("../components/planner/pages/AdminDashboardPage.tsx", import.meta.url), "utf8");
+  const settings = await readFile(new URL("../components/planner/pages/SettingsPage.tsx", import.meta.url), "utf8");
+  assert.match(admin, /Reactivate/);
+  assert.match(admin, /inactive_users/);
+  assert.match(auth, /Account unavailable/);
+  assert.match(settings, /profile_image/);
+  assert.match(settings, /background_image/);
+  assert.match(app, /settings\.background_image/);
+});
+
 test("ships backend, containers, CI workflows, and supplied icon", async () => {
   const files = [
     "../backend/app/main.py",

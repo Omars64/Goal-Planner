@@ -154,6 +154,33 @@ def test_admin_user_management_and_role_protection(client: TestClient) -> None:
     assert listing.status_code == 200
     assert listing.json()["total"] == 2
     assert listing.json()["admins"] == 1
+    assert listing.json()["active_users"] == 2
+    assert listing.json()["inactive_users"] == 0
+
+    deactivated = client.patch(f"/api/admin/users/{managed['id']}", json={"is_active": False})
+    assert deactivated.status_code == 200
+    assert deactivated.json()["user"]["is_active"] is False
+    inactive_listing = client.get("/api/admin/users").json()
+    assert inactive_listing["total"] == 2
+    assert inactive_listing["inactive_users"] == 1
+    assert any(user["id"] == managed["id"] for user in inactive_listing["users"])
+
+    with TestClient(app) as inactive_client:
+        inactive_login = inactive_client.post(
+            "/api/auth/login", json={"email": "managed@example.com", "password": "ManagedPass123!"}
+        )
+        assert inactive_login.status_code == 403
+        assert "Contact an administrator" in inactive_login.json()["detail"]
+        inactive_signup = inactive_client.post(
+            "/api/auth/signup",
+            json={"username": "Managed User", "email": "managed@example.com", "password": "ManagedPass123!"},
+        )
+        assert inactive_signup.status_code == 409
+        assert "different email address" in inactive_signup.json()["detail"]
+
+    reactivated = client.patch(f"/api/admin/users/{managed['id']}", json={"is_active": True})
+    assert reactivated.status_code == 200
+    assert reactivated.json()["user"]["is_active"] is True
 
     edited = client.patch(
         f"/api/admin/users/{managed['id']}",

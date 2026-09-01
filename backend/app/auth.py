@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import json
 import os
 import smtplib
 from datetime import UTC, datetime, timedelta
@@ -44,6 +45,12 @@ def utc_after(**kwargs: int) -> str:
 
 
 def user_public(row: dict[str, Any]) -> dict[str, Any]:
+    profile_image = None
+    if row.get("profile_image_value"):
+        try:
+            profile_image = json.loads(row["profile_image_value"])
+        except (json.JSONDecodeError, TypeError):
+            profile_image = None
     return {
         "id": row["id"],
         "username": row["username"],
@@ -53,6 +60,7 @@ def user_public(row: dict[str, Any]) -> dict[str, Any]:
         "email_verified": bool(row.get("email_verified_at")),
         "created_at": row["created_at"],
         "last_login_at": row.get("last_login_at"),
+        "profile_image": profile_image,
     }
 
 
@@ -152,8 +160,16 @@ def deliver_verification_code(email: str, username: str, code: str) -> None:
 @router.post("/auth/signup", status_code=201)
 def signup(payload: SignupRequest) -> dict[str, Any]:
     with transaction() as connection:
-        existing = connection.execute("SELECT id FROM users WHERE email = ?", (payload.email,)).fetchone()
+        existing = connection.execute("SELECT * FROM users WHERE email = ?", (payload.email,)).fetchone()
         if existing:
+            if existing["email_verified_at"] and not existing["is_active"]:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "This account was deactivated. Contact an administrator to reactivate it, "
+                        "or sign up with a different email address"
+                    ),
+                )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="An account with this email already exists. Sign in or request a new code",
@@ -185,8 +201,13 @@ def verify_email(payload: VerifyEmailRequest, response: Response) -> dict[str, A
         if not user_row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No pending account was found")
         user = dict(user_row)
-        if user.get("email_verified_at") and user["is_active"]:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This email is already verified. Sign in")
+        if user.get("email_verified_at"):
+            detail = (
+                "This email is already verified. Sign in"
+                if user["is_active"]
+                else "This account was deactivated. Contact an administrator to reactivate it"
+            )
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
         code_row = connection.execute(
             """
             SELECT * FROM email_verification_codes
@@ -240,7 +261,12 @@ def resend_code(payload: ResendVerificationRequest) -> dict[str, Any]:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No pending account was found")
         user = dict(row)
         if user.get("email_verified_at"):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This email is already verified. Sign in")
+            detail = (
+                "This email is already verified. Sign in"
+                if user["is_active"]
+                else "This account was deactivated. Contact an administrator to reactivate it"
+            )
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
         threshold = (
             (datetime.now(UTC) - timedelta(seconds=VERIFICATION_RESEND_SECONDS)).replace(microsecond=0).isoformat()
         )
@@ -268,7 +294,10 @@ def login(payload: LoginRequest, response: Response) -> dict[str, Any]:
         if not user.get("email_verified_at"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verify your email before signing in")
         if not user["is_active"]:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is inactive")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This account was deactivated. Contact an administrator to restore access",
+            )
         logged_in = now_iso()
         connection.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (logged_in, user["id"]))
         _, token = create_session(connection, user["id"])
@@ -315,9 +344,15 @@ def list_approved_users(_: dict[str, Any] = Depends(require_admin)) -> dict[str,
     with connect() as connection:
         rows = connection.execute(
             """
-            SELECT * FROM users
-            WHERE is_active = 1 AND email_verified_at IS NOT NULL
-            ORDER BY CASE role WHEN 'admin' THEN 0 ELSE 1 END, created_at
+            SELECT users.*,
+                   (SELECT value FROM user_settings
+                    WHERE user_settings.user_id = users.id AND user_settings.key = 'profile_image')
+                   AS profile_image_value
+            FROM users
+            WHERE email_verified_at IS NOT NULL
+            ORDER BY CASE is_active WHEN 1 THEN 0 ELSE 1 END,
+                     CASE role WHEN 'admin' THEN 0 ELSE 1 END,
+                     created_at
             """
         ).fetchall()
     users = [user_public(dict(row)) for row in rows]
@@ -326,6 +361,8 @@ def list_approved_users(_: dict[str, Any] = Depends(require_admin)) -> dict[str,
         "total": len(users),
         "admins": sum(1 for item in users if item["role"] == "admin"),
         "regular_users": sum(1 for item in users if item["role"] == "user"),
+        "active_users": sum(1 for item in users if item["is_active"]),
+        "inactive_users": sum(1 for item in users if not item["is_active"]),
     }
 
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Eye, EyeOff, KeyRound, LoaderCircle, Pencil, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { Eye, EyeOff, KeyRound, LoaderCircle, Pencil, Power, PowerOff, ShieldCheck, UserCheck, UserPlus, Users, UserX } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 
 import { api } from "../api";
+import { ProfileAvatar } from "../ProfileAvatar";
 import { EntityDialog, ErrorState, Field, LoadingState, PageHeader, Panel, useResource } from "../shared";
 import type { AuthUser, UserRole } from "../types";
 
@@ -40,6 +41,7 @@ export function AdminDashboardPage({ currentUser }: { currentUser: AuthUser }) {
   const [role, setRole] = useState<UserRole>("user");
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
 
   const openCreate = () => {
     setSelected(null); setUsername(""); setEmail(""); setPassword(""); setRole("user"); setActive(true); setDialog("create");
@@ -83,6 +85,26 @@ export function AdminDashboardPage({ currentUser }: { currentUser: AuthUser }) {
     }
   };
 
+  const toggleStatus = async (user: AuthUser) => {
+    if (user.id === currentUser.id) return;
+    setStatusUpdating(user.id);
+    try {
+      const result = await api.adminUpdateUser(user.id, { is_active: !user.is_active });
+      toast.success(result.user.is_active ? "Account reactivated" : "Account deactivated", {
+        description: result.user.is_active
+          ? `${result.user.username} can sign in again.`
+          : `${result.user.username} has been signed out and cannot sign in.`,
+      });
+      await resource.reload();
+    } catch (caught) {
+      toast.error("Could not change account status", {
+        description: caught instanceof Error ? caught.message : "Please try again",
+      });
+    } finally {
+      setStatusUpdating(null);
+    }
+  };
+
   return (
     <div className="page-shell admin-page">
       <PageHeader eyebrow="Restricted access" title="Admin dashboard" description="Manage approved accounts, roles, profile details, and password access." actions={<Button className="neon-button" onClick={openCreate}><UserPlus />Create user</Button>} />
@@ -91,17 +113,18 @@ export function AdminDashboardPage({ currentUser }: { currentUser: AuthUser }) {
       {resource.data ? (
         <>
           <div className="admin-metrics">
-            <Panel><span><Users /></span><div><small>Approved users</small><strong>{resource.data.total}</strong></div></Panel>
+            <Panel><span><Users /></span><div><small>Approved accounts</small><strong>{resource.data.total}</strong></div></Panel>
+            <Panel><span><UserCheck /></span><div><small>Active</small><strong>{resource.data.active_users}</strong></div></Panel>
+            <Panel><span><UserX /></span><div><small>Inactive</small><strong>{resource.data.inactive_users}</strong></div></Panel>
             <Panel><span><ShieldCheck /></span><div><small>Administrators</small><strong>{resource.data.admins}</strong></div></Panel>
-            <Panel><span><Users /></span><div><small>Users</small><strong>{resource.data.regular_users}</strong></div></Panel>
           </div>
           <div className="admin-user-list">
             {resource.data.users.map((user) => (
-              <article className="admin-user-card" key={user.id}>
-                <div className="user-avatar" aria-hidden="true">{user.username.slice(0, 2).toUpperCase()}</div>
-                <div className="user-primary"><div><h2>{user.username}</h2>{user.id === currentUser.id ? <span className="you-pill">You</span> : null}<span className={`role-pill role-${user.role}`}>{user.role}</span></div><a href={`mailto:${user.email}`}>{user.email}</a></div>
+              <article className={`admin-user-card ${user.is_active ? "" : "is-inactive"}`} key={user.id}>
+                <ProfileAvatar name={user.username} image={user.profile_image} className="user-avatar" />
+                <div className="user-primary"><div><h2>{user.username}</h2>{user.id === currentUser.id ? <span className="you-pill">You</span> : null}<span className={`role-pill role-${user.role}`}>{user.role}</span><span className={`status-pill ${user.is_active ? "status-active" : "status-inactive"}`}>{user.is_active ? "Active" : "Inactive"}</span></div><a href={`mailto:${user.email}`}>{user.email}</a></div>
                 <dl><div><dt>Joined</dt><dd>{formatAccountDate(user.created_at)}</dd></div><div><dt>Last login</dt><dd>{formatAccountDate(user.last_login_at)}</dd></div></dl>
-                <div className="admin-user-actions"><Button variant="outline" onClick={() => openEdit(user)}><Pencil />Edit</Button><Button variant="outline" onClick={() => openPassword(user)}><KeyRound />Password</Button></div>
+                <div className="admin-user-actions"><Button variant="outline" onClick={() => openEdit(user)}><Pencil />Edit</Button><Button variant="outline" onClick={() => openPassword(user)}><KeyRound />Password</Button><Button variant="outline" disabled={user.id === currentUser.id || statusUpdating === user.id} onClick={() => void toggleStatus(user)}>{statusUpdating === user.id ? <LoaderCircle className="spin" /> : user.is_active ? <PowerOff /> : <Power />}{user.is_active ? "Deactivate" : "Reactivate"}</Button></div>
               </article>
             ))}
           </div>

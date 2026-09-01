@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -9,6 +11,7 @@ TaskStatus = Literal["todo", "in_progress", "done", "archived"]
 GoalStatus = Literal["active", "completed", "paused", "archived"]
 Recurrence = Literal["none", "daily", "weekdays", "weekly", "monthly"]
 UserRole = Literal["admin", "user"]
+ALLOWED_IMAGE_PREFIXES = ("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,")
 
 
 def normalized_email(value: str) -> str:
@@ -26,6 +29,21 @@ def normalized_username(value: str) -> str:
     if len(normalized) < 2:
         raise ValueError("Username must be at least 2 characters")
     return normalized
+
+
+def validated_image_data_url(value: str | None, maximum_bytes: int) -> str | None:
+    if value is None:
+        return None
+    prefix = next((item for item in ALLOWED_IMAGE_PREFIXES if value.startswith(item)), None)
+    if not prefix:
+        raise ValueError("Upload a JPEG, PNG, or WebP image")
+    try:
+        decoded = base64.b64decode(value[len(prefix) :], validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("The image data is invalid") from exc
+    if len(decoded) > maximum_bytes:
+        raise ValueError("The processed image is too large")
+    return value
 
 
 class PatchModel(BaseModel):
@@ -255,6 +273,18 @@ class SettingsUpdate(PatchModel):
     work_days: list[str] | None = None
     compact_mode: bool | None = None
     notifications_enabled: bool | None = None
+    profile_image: str | None = Field(default=None, max_length=700_000)
+    background_image: str | None = Field(default=None, max_length=2_400_000)
+
+    @field_validator("profile_image")
+    @classmethod
+    def validate_profile_image(cls, value: str | None) -> str | None:
+        return validated_image_data_url(value, 500_000)
+
+    @field_validator("background_image")
+    @classmethod
+    def validate_background_image(cls, value: str | None) -> str | None:
+        return validated_image_data_url(value, 1_750_000)
 
 
 class ImportRequest(PatchModel):

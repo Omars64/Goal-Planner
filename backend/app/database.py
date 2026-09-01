@@ -389,6 +389,9 @@ def init_db() -> None:
         admin = bootstrap_admin(connection)
         migrate_user_ownership(connection, admin["id"])
         cleanup_non_admin_starter_data(connection, admin["id"])
+        users = connection.execute("SELECT id, username FROM users").fetchall()
+        for user in users:
+            seed_user_settings(connection, user["id"], user["username"])
         row = connection.execute(
             "SELECT COUNT(*) AS count FROM routine_blocks WHERE user_id = ?", (admin["id"],)
         ).fetchone()
@@ -407,6 +410,8 @@ def seed_user_settings(connection: DatabaseConnection, user_id: str, display_nam
         "work_days": ["sunday", "monday", "tuesday", "wednesday", "thursday"],
         "compact_mode": False,
         "notifications_enabled": False,
+        "profile_image": None,
+        "background_image": None,
     }
     connection.executemany(
         """
