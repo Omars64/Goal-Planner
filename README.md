@@ -24,6 +24,8 @@ The project is ready to push to GitHub, test in pull requests, package as contai
 - **Reminders:** browser/in-app alerts, recurrence, pause, snooze, and desktop notification permission
 - **Insights:** 7/14/30-day charts, task completion, habit consistency, and review prompts
 - **Settings:** work profile, step goal, week start, compact layout, JSON backup/import, and starter reset
+- **Accounts:** login, email-verified signup, secure password changes, and private per-user planner data
+- **Administration:** role-gated user dashboard for approved accounts, profile edits, roles, and password resets
 - **Persistence:** normalized PostgreSQL or SQLite database managed by the Python API
 - **Reliability:** error states, connectivity recovery, validation, destructive confirmations, and an error boundary
 - **Responsive UI:** desktop, tablet, and mobile navigation and layouts
@@ -85,7 +87,7 @@ npm ci
 npm run dev
 ```
 
-Copy `.env.example` to `.env.local` when the backend uses a different URL.
+Copy `.env.example` to `.env.local`, replace the development admin password, and configure an SMTP account before testing signup emails. Production secrets belong in the hosting provider, never in Git.
 
 ## Docker
 
@@ -134,6 +136,8 @@ Important endpoint groups:
 - `/api/routine-blocks`, `/api/events`, and `/api/tasks`
 - `/api/goals`, `/api/habits`, and `/api/reminders`
 - `/api/settings`, `/api/export`, `/api/import`, and `/api/system/reset`
+- `/api/auth/signup`, `/api/auth/verify`, `/api/auth/login`, and `/api/auth/change-password`
+- `/api/admin/users` (administrator only)
 - `/api/health`
 
 The Settings page can export and restore a portable JSON backup. Database files and exported backups are intentionally ignored by Git.
@@ -157,8 +161,9 @@ The repository deploys as two Vercel projects connected to the same GitHub repos
 
 1. Import `backend/` as `goal-planner-api` and keep `main` as the production branch.
 2. Add a Neon Postgres integration to the API project so it injects `DATABASE_URL`.
-3. Import the repository root as `goal-planner` and set `NEXT_PUBLIC_API_URL` to the API project's `/api` URL.
-4. Deploy both projects. Vercel automatically builds each project when `main` changes.
+3. Add the required admin bootstrap and SMTP variables from `.env.example` to the API project as encrypted Production and Preview variables.
+4. Import the repository root as `goal-planner`. Its same-origin `/api` rewrite targets the stable API project URL.
+5. Deploy both projects. Vercel automatically builds each project when `main` changes.
 
 Schema creation and initial planner data are handled automatically on the first API request. Later pushes to GitHub create Vercel deployments without a local machine.
 
@@ -172,7 +177,7 @@ Deploy the two containers to any Docker-compatible platform:
 4. Build the web image with `NEXT_PUBLIC_API_URL=https://your-api.example/api`.
 5. Protect the deployment with platform authentication if it is accessible publicly.
 
-The app has no built-in multi-user authentication because it is designed as a personal planner. Add authentication and per-user database ownership before offering it as a shared public service.
+Every planner record is owned by an authenticated user. The first configured administrator receives pre-existing legacy records during the automatic schema migration.
 
 ## Project layout
 

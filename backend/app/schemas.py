@@ -2,16 +2,92 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Priority = Literal["low", "medium", "high", "urgent"]
 TaskStatus = Literal["todo", "in_progress", "done", "archived"]
 GoalStatus = Literal["active", "completed", "paused", "archived"]
 Recurrence = Literal["none", "daily", "weekdays", "weekly", "monthly"]
+UserRole = Literal["admin", "user"]
+
+
+def normalized_email(value: str) -> str:
+    normalized = value.strip().lower()
+    if len(normalized) > 254 or "@" not in normalized:
+        raise ValueError("Enter a valid email address")
+    local, domain = normalized.rsplit("@", 1)
+    if not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
+        raise ValueError("Enter a valid email address")
+    return normalized
+
+
+def normalized_username(value: str) -> str:
+    normalized = " ".join(value.strip().split())
+    if len(normalized) < 2:
+        raise ValueError("Username must be at least 2 characters")
+    return normalized
 
 
 class PatchModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class SignupRequest(PatchModel):
+    username: str = Field(min_length=2, max_length=80)
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=8, max_length=128)
+
+    _username = field_validator("username")(normalized_username)
+    _email = field_validator("email")(normalized_email)
+
+
+class LoginRequest(PatchModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=128)
+
+    _email = field_validator("email")(normalized_email)
+
+
+class VerifyEmailRequest(PatchModel):
+    email: str = Field(min_length=3, max_length=254)
+    code: str = Field(pattern=r"^\d{6}$")
+
+    _email = field_validator("email")(normalized_email)
+
+
+class ResendVerificationRequest(PatchModel):
+    email: str = Field(min_length=3, max_length=254)
+
+    _email = field_validator("email")(normalized_email)
+
+
+class ChangePasswordRequest(PatchModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class AdminUserCreate(PatchModel):
+    username: str = Field(min_length=2, max_length=80)
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=8, max_length=128)
+    role: UserRole = "user"
+
+    _username = field_validator("username")(normalized_username)
+    _email = field_validator("email")(normalized_email)
+
+
+class AdminUserUpdate(PatchModel):
+    username: str | None = Field(default=None, min_length=2, max_length=80)
+    email: str | None = Field(default=None, min_length=3, max_length=254)
+    role: UserRole | None = None
+    is_active: bool | None = None
+
+    _username = field_validator("username")(lambda value: normalized_username(value) if value is not None else value)
+    _email = field_validator("email")(lambda value: normalized_email(value) if value is not None else value)
+
+
+class AdminPasswordReset(PatchModel):
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class TaskCreate(PatchModel):

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Bell, CheckCircle2, Database, Download, HardDrive, RefreshCcw, Save, Server, Upload } from "lucide-react";
+import { Bell, CheckCircle2, Database, Download, Eye, EyeOff, HardDrive, KeyRound, RefreshCcw, Save, Server, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -24,16 +24,21 @@ import { Switch } from "@/components/ui/switch";
 import { api } from "../api";
 import { DAYS, todayISO } from "../date";
 import { ErrorState, Field, LoadingState, PageHeader, Panel, useResource } from "../shared";
-import type { PlannerSettings } from "../types";
+import type { AuthUser, PlannerSettings } from "../types";
 
 
-export function SettingsPage({ onSettingsChanged }: { onSettingsChanged?: (settings: PlannerSettings) => void }) {
+export function SettingsPage({ currentUser, onSettingsChanged }: { currentUser: AuthUser; onSettingsChanged?: (settings: PlannerSettings) => void }) {
   const resource = useResource(() => api.settings(), []);
   const [form, setForm] = useState<PlannerSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const [resetOpen, setResetOpen] = useState(false);
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (resource.data) queueMicrotask(() => setForm(resource.data)); }, [resource.data]);
@@ -95,6 +100,21 @@ export function SettingsPage({ onSettingsChanged }: { onSettingsChanged?: (setti
     }
   };
 
+  const changePassword = async (event: FormEvent) => {
+    event.preventDefault();
+    setChangingPassword(true);
+    try {
+      const result = await api.changePassword(currentPassword, newPassword);
+      setCurrentPassword("");
+      setNewPassword("");
+      toast.success("Password changed", { description: result.message });
+    } catch (caught) {
+      toast.error("Could not change password", { description: caught instanceof Error ? caught.message : "Please try again" });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   return (
     <div className="page-shell settings-page">
       <PageHeader eyebrow="Make it yours" title="Settings & data" description="Adjust the planner defaults, verify the backend, and keep a portable JSON backup of everything you create." />
@@ -103,6 +123,15 @@ export function SettingsPage({ onSettingsChanged }: { onSettingsChanged?: (setti
       {resource.error && !form ? <ErrorState message={resource.error} onRetry={() => void resource.reload()} /> : null}
       {form ? (
         <div className="settings-layout">
+          <Panel className="settings-account" title="Account security">
+            <div className="account-summary"><span>{currentUser.username.slice(0, 2).toUpperCase()}</span><div><strong>{currentUser.username}</strong><small>{currentUser.email}</small></div><em>{currentUser.role}</em></div>
+            <form className="entity-form" onSubmit={changePassword}>
+              <Field label="Current password"><div className="password-input"><Input required minLength={8} type={showCurrentPassword ? "text" : "password"} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" /><button type="button" aria-label={showCurrentPassword ? "Hide current password" : "Show current password"} onClick={() => setShowCurrentPassword(!showCurrentPassword)}>{showCurrentPassword ? <EyeOff /> : <Eye />}</button></div></Field>
+              <Field label="New password" hint="Use at least eight characters."><div className="password-input"><Input required minLength={8} type={showNewPassword ? "text" : "password"} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" /><button type="button" aria-label={showNewPassword ? "Hide new password" : "Show new password"} onClick={() => setShowNewPassword(!showNewPassword)}>{showNewPassword ? <EyeOff /> : <Eye />}</button></div></Field>
+              <div className="dialog-actions"><Button className="neon-button" disabled={changingPassword}><KeyRound />{changingPassword ? "Updating..." : "Change password"}</Button></div>
+            </form>
+          </Panel>
+
           <Panel className="settings-profile" title="Planner profile">
             <form className="entity-form" onSubmit={save}>
               <div className="form-grid two-columns">

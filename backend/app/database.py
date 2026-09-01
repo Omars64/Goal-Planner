@@ -10,6 +10,8 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from .security import hash_password
+
 try:
     import psycopg
     from psycopg.rows import dict_row
@@ -116,6 +118,49 @@ def transaction() -> Iterator[DatabaseConnection]:
 
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user',
+    is_active INTEGER NOT NULL DEFAULT 0,
+    email_verified_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_login_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS email_verification_codes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    code_salt TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    consumed_at TEXT,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_settings (
+    user_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    PRIMARY KEY(user_id, key),
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -219,7 +264,75 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
 CREATE INDEX IF NOT EXISTS idx_habit_entries_date ON habit_entries(entry_date);
 CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(remind_at, enabled);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(token_hash, expires_at);
+CREATE INDEX IF NOT EXISTS idx_verification_codes_user ON email_verification_codes(user_id, created_at);
 """
+
+OWNED_TABLES = ["routine_blocks", "tasks", "events", "goals", "habits", "habit_entries", "reminders"]
+
+
+def column_exists(connection: DatabaseConnection, table: str, column: str) -> bool:
+    if connection.is_postgres:
+        row = connection.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND column_name = ?",
+            (table, column),
+        ).fetchone()
+        return row is not None
+    return any(row["name"] == column for row in connection.execute(f"PRAGMA table_info({table})").fetchall())
+
+
+def bootstrap_admin(connection: DatabaseConnection) -> dict[str, Any]:
+    email = os.getenv("GOAL_PLANNER_ADMIN_EMAIL", "").strip().lower()
+    password = os.getenv("GOAL_PLANNER_ADMIN_PASSWORD", "")
+    username = os.getenv("GOAL_PLANNER_ADMIN_USERNAME", "Admin").strip() or "Admin"
+    if not email or not password:
+        raise RuntimeError("GOAL_PLANNER_ADMIN_EMAIL and GOAL_PLANNER_ADMIN_PASSWORD are required")
+    if len(password) < 8:
+        raise RuntimeError("GOAL_PLANNER_ADMIN_PASSWORD must be at least 8 characters")
+
+    existing = connection.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    if existing:
+        return dict(existing)
+
+    created = now_iso()
+    admin_id = new_id()
+    connection.execute(
+        """
+        INSERT INTO users(
+            id, username, email, password_hash, role, is_active, email_verified_at,
+            created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'admin', 1, ?, ?, ?)
+        """,
+        (admin_id, username, email, hash_password(password), created, created, created),
+    )
+    return dict(connection.execute("SELECT * FROM users WHERE id = ?", (admin_id,)).fetchone())
+
+
+def migrate_user_ownership(connection: DatabaseConnection, admin_id: str) -> None:
+    for table in OWNED_TABLES:
+        if not column_exists(connection, table, "user_id"):
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN user_id TEXT")
+    connection.execute(
+        """
+        UPDATE habit_entries
+        SET user_id = (SELECT habits.user_id FROM habits WHERE habits.id = habit_entries.habit_id)
+        WHERE user_id IS NULL OR user_id = ''
+        """
+    )
+    for table in OWNED_TABLES:
+        connection.execute(f"UPDATE {table} SET user_id = ? WHERE user_id IS NULL OR user_id = ''", (admin_id,))
+        connection.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_user ON {table}(user_id)")
+
+    migrated = connection.execute(
+        "SELECT COUNT(*) AS count FROM user_settings WHERE user_id = ?", (admin_id,)
+    ).fetchone()
+    if migrated["count"] == 0:
+        legacy = connection.execute("SELECT key, value FROM settings").fetchall()
+        if legacy:
+            connection.executemany(
+                "INSERT INTO user_settings(user_id, key, value) VALUES (?, ?, ?)",
+                [(admin_id, row["key"], row["value"]) for row in legacy],
+            )
 
 
 def init_db() -> None:
@@ -227,16 +340,20 @@ def init_db() -> None:
         if connection.is_postgres:
             connection.execute("SELECT pg_advisory_xact_lock(20260831)")
         connection.executescript(SCHEMA)
-        row = connection.execute("SELECT COUNT(*) AS count FROM settings").fetchone()
+        admin = bootstrap_admin(connection)
+        migrate_user_ownership(connection, admin["id"])
+        row = connection.execute(
+            "SELECT COUNT(*) AS count FROM routine_blocks WHERE user_id = ?", (admin["id"],)
+        ).fetchone()
         if row["count"] == 0:
-            seed_database(connection)
+            seed_database(connection, admin["id"], admin["username"])
 
 
-def seed_database(connection: DatabaseConnection) -> None:
+def seed_database(connection: DatabaseConnection, user_id: str, display_name: str = "User") -> None:
     today = date.today()
     created = now_iso()
     settings: dict[str, Any] = {
-        "display_name": "Omar",
+        "display_name": display_name,
         "timezone": "Asia/Kuwait",
         "week_start": "sunday",
         "daily_step_goal": 10000,
@@ -247,8 +364,8 @@ def seed_database(connection: DatabaseConnection) -> None:
         "notifications_enabled": False,
     }
     connection.executemany(
-        "INSERT INTO settings(key, value) VALUES (?, ?)",
-        [(key, json.dumps(value)) for key, value in settings.items()],
+        "INSERT INTO user_settings(user_id, key, value) VALUES (?, ?, ?)",
+        [(user_id, key, json.dumps(value)) for key, value in settings.items()],
     )
 
     weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday"]
@@ -309,13 +426,14 @@ def seed_database(connection: DatabaseConnection) -> None:
     connection.executemany(
         """
         INSERT INTO routine_blocks(
-            id, title, days, start_time, end_time, category, color, notes,
+            id, user_id, title, days, start_time, end_time, category, color, notes,
             is_movement, is_active, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
         """,
         [
             (
                 new_id(),
+                user_id,
                 title,
                 json.dumps(weekdays),
                 start,
@@ -337,20 +455,21 @@ def seed_database(connection: DatabaseConnection) -> None:
         ("Plan tomorrow", "Choose tomorrow's first task before finishing the day.", "notebook-pen", "#ec4899"),
     ]
     connection.executemany(
-        "INSERT INTO habits(id, name, description, icon, color, target_days, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO habits(id, user_id, name, description, icon, color, target_days, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
-            (new_id(), name, description, icon, color, json.dumps(weekdays), created)
+            (new_id(), user_id, name, description, icon, color, json.dumps(weekdays), created)
             for name, description, icon, color in habits
         ],
     )
 
     connection.execute(
         """
-        INSERT INTO goals(id, title, description, target_value, current_value, unit, deadline, status, color, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+        INSERT INTO goals(id, user_id, title, description, target_value, current_value, unit, deadline, status, color, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         """,
         (
             new_id(),
+            user_id,
             "Consistent movement week",
             "Complete intentional movement on every workday.",
             5,
@@ -363,12 +482,13 @@ def seed_database(connection: DatabaseConnection) -> None:
     )
     connection.execute(
         """
-        INSERT INTO tasks(id, title, notes, status, priority, category, due_date, scheduled_date,
+        INSERT INTO tasks(id, user_id, title, notes, status, priority, category, due_date, scheduled_date,
                           estimate_minutes, tags, recurring_rule, created_at)
-        VALUES (?, ?, ?, 'todo', 'high', 'planning', ?, ?, 10, ?, 'weekdays', ?)
+        VALUES (?, ?, ?, ?, 'todo', 'high', 'planning', ?, ?, 10, ?, 'weekdays', ?)
         """,
         (
             new_id(),
+            user_id,
             "Choose today's top three priorities",
             "Keep the list realistic for an 8:00–5:00 engineering workday.",
             today.isoformat(),
@@ -380,11 +500,12 @@ def seed_database(connection: DatabaseConnection) -> None:
     reminder_time = datetime.combine(today + timedelta(days=1), datetime.min.time()).replace(hour=8, minute=50)
     connection.execute(
         """
-        INSERT INTO reminders(id, title, body, remind_at, recurrence, enabled, channel, created_at)
-        VALUES (?, ?, ?, ?, 'weekdays', 1, 'browser', ?)
+        INSERT INTO reminders(id, user_id, title, body, remind_at, recurrence, enabled, channel, created_at)
+        VALUES (?, ?, ?, ?, ?, 'weekdays', 1, 'browser', ?)
         """,
         (
             new_id(),
+            user_id,
             "Movement reset",
             "Stand up, walk briefly and reset your posture.",
             reminder_time.isoformat(timespec="minutes"),
@@ -413,9 +534,11 @@ def all_rows(connection: DatabaseConnection, query: str, parameters: tuple[Any, 
     return [row_to_dict(row) or {} for row in connection.execute(query, parameters).fetchall()]
 
 
-def settings_dict(connection: DatabaseConnection) -> dict[str, Any]:
+def settings_dict(connection: DatabaseConnection, user_id: str) -> dict[str, Any]:
     result: dict[str, Any] = {}
-    for row in connection.execute("SELECT key, value FROM settings ORDER BY key").fetchall():
+    for row in connection.execute(
+        "SELECT key, value FROM user_settings WHERE user_id = ? ORDER BY key", (user_id,)
+    ).fetchall():
         try:
             result[row["key"]] = json.loads(row["value"])
         except json.JSONDecodeError:

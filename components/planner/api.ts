@@ -1,4 +1,6 @@
 import type {
+  AdminUsersResponse,
+  AuthUser,
   DashboardData,
   EventInput,
   Goal,
@@ -16,14 +18,16 @@ import type {
   TaskInput,
 } from "./types";
 
-const localBackendHosts = new Set([
-  "localhost",
-  "127.0.0.1",
-  "omars64-goal-planner.omarsolanki35.chatgpt.site",
-]);
-const inferredApiUrl = typeof window !== "undefined" && localBackendHosts.has(window.location.hostname)
-  ? "http://localhost:8000/api"
-  : "/api";
+const inferredApiUrl = (() => {
+  if (typeof window === "undefined") return "/api";
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    return `http://${window.location.hostname}:8000/api`;
+  }
+  if (window.location.hostname === "omars64-goal-planner.omarsolanki35.chatgpt.site") {
+    return "http://localhost:8000/api";
+  }
+  return "/api";
+})();
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL || inferredApiUrl).replace(/\/$/, "");
 
 export class ApiError extends Error {
@@ -39,6 +43,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...options.headers,
@@ -63,6 +68,34 @@ const json = (method: string, body: unknown): RequestInit => ({ method, body: JS
 export const api = {
   baseUrl: API_BASE,
   health: () => request<{ status: string }>("/health"),
+  me: () => request<AuthUser>("/auth/me"),
+  login: (email: string, password: string) =>
+    request<{ status: string; message: string; user: AuthUser }>("/auth/login", json("POST", { email, password })),
+  signup: (username: string, email: string, password: string) =>
+    request<{ status: string; email: string; expires_in: number; message: string }>(
+      "/auth/signup",
+      json("POST", { username, email, password }),
+    ),
+  verifyEmail: (email: string, code: string) =>
+    request<{ status: string; message: string; user: AuthUser }>("/auth/verify", json("POST", { email, code })),
+  resendCode: (email: string) =>
+    request<{ status: string; message: string }>("/auth/resend-code", json("POST", { email })),
+  logout: () => request<{ status: string; message: string }>("/auth/logout", { method: "POST" }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ status: string; message: string }>(
+      "/auth/change-password",
+      json("POST", { current_password: currentPassword, new_password: newPassword }),
+    ),
+  adminUsers: () => request<AdminUsersResponse>("/admin/users"),
+  adminCreateUser: (body: { username: string; email: string; password: string; role: "admin" | "user" }) =>
+    request<{ message: string; user: AuthUser }>("/admin/users", json("POST", body)),
+  adminUpdateUser: (id: string, body: Partial<Pick<AuthUser, "username" | "email" | "role" | "is_active">>) =>
+    request<{ message: string; user: AuthUser }>(`/admin/users/${id}`, json("PATCH", body)),
+  adminResetPassword: (id: string, newPassword: string) =>
+    request<{ message: string; user: AuthUser }>(
+      `/admin/users/${id}/password`,
+      json("PUT", { new_password: newPassword }),
+    ),
   dashboard: (date: string) => request<DashboardData>(`/dashboard?date=${encodeURIComponent(date)}`),
   insights: (start?: string, end?: string) => {
     const params = new URLSearchParams();

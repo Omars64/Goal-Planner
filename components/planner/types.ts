@@ -7,7 +7,28 @@ export type PageKey =
   | "habits"
   | "reminders"
   | "insights"
+  | "admin"
   | "settings";
+
+export type UserRole = "admin" | "user";
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  email: string;
+  role: UserRole;
+  is_active: boolean;
+  email_verified: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface AdminUsersResponse {
+  users: AuthUser[];
+  total: number;
+  admins: number;
+  regular_users: number;
+}
 
 export type Priority = "low" | "medium" | "high" | "urgent";
 export type TaskStatus = "todo" | "in_progress" | "done" | "archived";
@@ -162,4 +183,3 @@ export type EventInput = Omit<PlannerEvent, "id" | "created_at">;
 export type GoalInput = Omit<Goal, "id" | "created_at">;
 export type HabitInput = Omit<Habit, "id" | "created_at" | "entries" | "completed_count" | "streak">;
 export type ReminderInput = Omit<Reminder, "id" | "created_at">;
-

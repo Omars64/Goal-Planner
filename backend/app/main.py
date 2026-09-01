@@ -6,10 +6,12 @@ from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from .auth import require_user
+from .auth import router as auth_router
 from .database import (
     DatabaseConnection,
     all_rows,
@@ -78,6 +80,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router)
 
 
 TABLE_FIELDS: dict[str, list[str]] = {
@@ -135,16 +138,19 @@ def normalized_payload(model: BaseModel) -> dict[str, Any]:
     return payload
 
 
-def get_record(connection: DatabaseConnection, table: str, record_id: str) -> dict[str, Any]:
-    record = row_to_dict(connection.execute(f"SELECT * FROM {table} WHERE id = ?", (record_id,)).fetchone())
+def get_record(connection: DatabaseConnection, table: str, record_id: str, user_id: str) -> dict[str, Any]:
+    record = row_to_dict(
+        connection.execute(f"SELECT * FROM {table} WHERE id = ? AND user_id = ?", (record_id, user_id)).fetchone()
+    )
     if not record:
         raise HTTPException(status_code=404, detail=f"{table.rstrip('s').replace('_', ' ')} not found")
     return record
 
 
-def create_record(table: str, model: BaseModel) -> dict[str, Any]:
+def create_record(table: str, model: BaseModel, user_id: str) -> dict[str, Any]:
     payload = normalized_payload(model)
     payload["id"] = new_id()
+    payload["user_id"] = user_id
     payload["created_at"] = now_iso()
     columns = list(payload)
     placeholders = ", ".join("?" for _ in columns)
@@ -153,13 +159,13 @@ def create_record(table: str, model: BaseModel) -> dict[str, Any]:
             f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})",
             tuple(payload[column] for column in columns),
         )
-        return get_record(connection, table, payload["id"])
+        return get_record(connection, table, payload["id"], user_id)
 
 
-def update_record(table: str, record_id: str, model: BaseModel) -> dict[str, Any]:
+def update_record(table: str, record_id: str, model: BaseModel, user_id: str) -> dict[str, Any]:
     payload = normalized_payload(model)
     with transaction() as connection:
-        current = get_record(connection, table, record_id)
+        current = get_record(connection, table, record_id, user_id)
         if table in {"events", "routine_blocks"}:
             start_time = payload.get("start_time", current["start_time"])
             end_time = payload.get("end_time", current["end_time"])
@@ -173,16 +179,16 @@ def update_record(table: str, record_id: str, model: BaseModel) -> dict[str, Any
             return current
         assignments = ", ".join(f"{key} = ?" for key in payload)
         connection.execute(
-            f"UPDATE {table} SET {assignments} WHERE id = ?",
-            (*payload.values(), record_id),
+            f"UPDATE {table} SET {assignments} WHERE id = ? AND user_id = ?",
+            (*payload.values(), record_id, user_id),
         )
-        return get_record(connection, table, record_id)
+        return get_record(connection, table, record_id, user_id)
 
 
-def delete_record(table: str, record_id: str) -> Response:
+def delete_record(table: str, record_id: str, user_id: str) -> Response:
     with transaction() as connection:
-        get_record(connection, table, record_id)
-        connection.execute(f"DELETE FROM {table} WHERE id = ?", (record_id,))
+        get_record(connection, table, record_id, user_id)
+        connection.execute(f"DELETE FROM {table} WHERE id = ? AND user_id = ?", (record_id, user_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -199,21 +205,24 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/settings")
-def get_settings() -> dict[str, Any]:
+def get_settings(user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
     with connect() as connection:
-        return settings_dict(connection)
+        return settings_dict(connection, user["id"])
 
 
 @app.patch("/api/settings")
-def patch_settings(payload: SettingsUpdate) -> dict[str, Any]:
+def patch_settings(payload: SettingsUpdate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
     updates = payload.model_dump(exclude_unset=True)
     with transaction() as connection:
         for key, value in updates.items():
             connection.execute(
-                "INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                (key, json.dumps(value)),
+                """
+                INSERT INTO user_settings(user_id, key, value) VALUES (?, ?, ?)
+                ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value
+                """,
+                (user["id"], key, json.dumps(value)),
             )
-        return settings_dict(connection)
+        return settings_dict(connection, user["id"])
 
 
 @app.get("/api/tasks")
@@ -222,9 +231,10 @@ def list_tasks(
     priority: str | None = None,
     scheduled_date: str | None = None,
     search: str | None = None,
+    user: dict[str, Any] = Depends(require_user),
 ) -> list[dict[str, Any]]:
-    clauses: list[str] = []
-    parameters: list[Any] = []
+    clauses: list[str] = ["user_id = ?"]
+    parameters: list[Any] = [user["id"]]
     if task_status:
         clauses.append("status = ?")
         parameters.append(task_status)
@@ -248,46 +258,56 @@ def list_tasks(
 
 
 @app.post("/api/tasks", status_code=201)
-def post_task(payload: TaskCreate) -> dict[str, Any]:
-    return create_record("tasks", payload)
+def post_task(payload: TaskCreate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    return create_record("tasks", payload, user["id"])
 
 
 @app.patch("/api/tasks/{record_id}")
-def patch_task(record_id: str, payload: TaskUpdate) -> dict[str, Any]:
-    return update_record("tasks", record_id, payload)
+def patch_task(record_id: str, payload: TaskUpdate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    return update_record("tasks", record_id, payload, user["id"])
 
 
 @app.delete("/api/tasks/{record_id}", status_code=204)
-def remove_task(record_id: str) -> Response:
-    return delete_record("tasks", record_id)
+def remove_task(record_id: str, user: dict[str, Any] = Depends(require_user)) -> Response:
+    return delete_record("tasks", record_id, user["id"])
 
 
 @app.get("/api/routine-blocks")
-def list_routine_blocks(day: str | None = None) -> list[dict[str, Any]]:
+def list_routine_blocks(day: str | None = None, user: dict[str, Any] = Depends(require_user)) -> list[dict[str, Any]]:
     with connect() as connection:
-        rows = all_rows(connection, "SELECT * FROM routine_blocks ORDER BY start_time, end_time")
+        rows = all_rows(
+            connection,
+            "SELECT * FROM routine_blocks WHERE user_id = ? ORDER BY start_time, end_time",
+            (user["id"],),
+        )
     return [row for row in rows if not day or day.lower() in row["days"]]
 
 
 @app.post("/api/routine-blocks", status_code=201)
-def post_routine_block(payload: RoutineBlockCreate) -> dict[str, Any]:
-    return create_record("routine_blocks", payload)
+def post_routine_block(payload: RoutineBlockCreate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    return create_record("routine_blocks", payload, user["id"])
 
 
 @app.patch("/api/routine-blocks/{record_id}")
-def patch_routine_block(record_id: str, payload: RoutineBlockUpdate) -> dict[str, Any]:
-    return update_record("routine_blocks", record_id, payload)
+def patch_routine_block(
+    record_id: str, payload: RoutineBlockUpdate, user: dict[str, Any] = Depends(require_user)
+) -> dict[str, Any]:
+    return update_record("routine_blocks", record_id, payload, user["id"])
 
 
 @app.delete("/api/routine-blocks/{record_id}", status_code=204)
-def remove_routine_block(record_id: str) -> Response:
-    return delete_record("routine_blocks", record_id)
+def remove_routine_block(record_id: str, user: dict[str, Any] = Depends(require_user)) -> Response:
+    return delete_record("routine_blocks", record_id, user["id"])
 
 
 @app.get("/api/events")
-def list_events(start: str | None = None, end: str | None = None) -> list[dict[str, Any]]:
-    clauses: list[str] = []
-    parameters: list[str] = []
+def list_events(
+    start: str | None = None,
+    end: str | None = None,
+    user: dict[str, Any] = Depends(require_user),
+) -> list[dict[str, Any]]:
+    clauses: list[str] = ["user_id = ?"]
+    parameters: list[str] = [user["id"]]
     if start:
         clauses.append("event_date >= ?")
         parameters.append(start)
@@ -300,61 +320,74 @@ def list_events(start: str | None = None, end: str | None = None) -> list[dict[s
 
 
 @app.post("/api/events", status_code=201)
-def post_event(payload: EventCreate) -> dict[str, Any]:
-    return create_record("events", payload)
+def post_event(payload: EventCreate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    return create_record("events", payload, user["id"])
 
 
 @app.patch("/api/events/{record_id}")
-def patch_event(record_id: str, payload: EventUpdate) -> dict[str, Any]:
-    return update_record("events", record_id, payload)
+def patch_event(record_id: str, payload: EventUpdate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    return update_record("events", record_id, payload, user["id"])
 
 
 @app.delete("/api/events/{record_id}", status_code=204)
-def remove_event(record_id: str) -> Response:
-    return delete_record("events", record_id)
+def remove_event(record_id: str, user: dict[str, Any] = Depends(require_user)) -> Response:
+    return delete_record("events", record_id, user["id"])
 
 
 @app.get("/api/goals")
-def list_goals(goal_status: str | None = Query(default=None, alias="status")) -> list[dict[str, Any]]:
+def list_goals(
+    goal_status: str | None = Query(default=None, alias="status"),
+    user: dict[str, Any] = Depends(require_user),
+) -> list[dict[str, Any]]:
     with connect() as connection:
         if goal_status:
             return all_rows(
-                connection, "SELECT * FROM goals WHERE status = ? ORDER BY deadline, created_at", (goal_status,)
+                connection,
+                "SELECT * FROM goals WHERE user_id = ? AND status = ? ORDER BY deadline, created_at",
+                (user["id"], goal_status),
             )
         return all_rows(
             connection,
-            "SELECT * FROM goals ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, deadline, created_at",
+            """
+            SELECT * FROM goals WHERE user_id = ?
+            ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, deadline, created_at
+            """,
+            (user["id"],),
         )
 
 
 @app.post("/api/goals", status_code=201)
-def post_goal(payload: GoalCreate) -> dict[str, Any]:
-    return create_record("goals", payload)
+def post_goal(payload: GoalCreate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    return create_record("goals", payload, user["id"])
 
 
 @app.patch("/api/goals/{record_id}")
-def patch_goal(record_id: str, payload: GoalUpdate) -> dict[str, Any]:
-    updated = update_record("goals", record_id, payload)
+def patch_goal(record_id: str, payload: GoalUpdate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    updated = update_record("goals", record_id, payload, user["id"])
     if updated["current_value"] >= updated["target_value"] and updated["status"] == "active":
-        updated = update_record("goals", record_id, GoalUpdate(status="completed"))
+        updated = update_record("goals", record_id, GoalUpdate(status="completed"), user["id"])
     return updated
 
 
 @app.delete("/api/goals/{record_id}", status_code=204)
-def remove_goal(record_id: str) -> Response:
-    return delete_record("goals", record_id)
+def remove_goal(record_id: str, user: dict[str, Any] = Depends(require_user)) -> Response:
+    return delete_record("goals", record_id, user["id"])
 
 
 @app.get("/api/habits")
-def list_habits(start: str | None = None, end: str | None = None) -> list[dict[str, Any]]:
+def list_habits(
+    start: str | None = None,
+    end: str | None = None,
+    user: dict[str, Any] = Depends(require_user),
+) -> list[dict[str, Any]]:
     end_date = date.fromisoformat(end) if end else date.today()
     start_date = date.fromisoformat(start) if start else end_date - timedelta(days=6)
     with connect() as connection:
-        habits = all_rows(connection, "SELECT * FROM habits ORDER BY created_at")
+        habits = all_rows(connection, "SELECT * FROM habits WHERE user_id = ? ORDER BY created_at", (user["id"],))
         entries = all_rows(
             connection,
-            "SELECT * FROM habit_entries WHERE entry_date BETWEEN ? AND ? ORDER BY entry_date",
-            (start_date.isoformat(), end_date.isoformat()),
+            "SELECT * FROM habit_entries WHERE user_id = ? AND entry_date BETWEEN ? AND ? ORDER BY entry_date",
+            (user["id"], start_date.isoformat(), end_date.isoformat()),
         )
     for habit in habits:
         habit_entries = [entry for entry in entries if entry["habit_id"] == habit["id"]]
@@ -377,69 +410,93 @@ def calculate_streak(entries: list[dict[str, Any]], end_date: date) -> int:
 
 
 @app.post("/api/habits", status_code=201)
-def post_habit(payload: HabitCreate) -> dict[str, Any]:
-    record = create_record("habits", payload)
+def post_habit(payload: HabitCreate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    record = create_record("habits", payload, user["id"])
     record.update({"entries": [], "completed_count": 0, "streak": 0})
     return record
 
 
 @app.patch("/api/habits/{record_id}")
-def patch_habit(record_id: str, payload: HabitUpdate) -> dict[str, Any]:
-    return update_record("habits", record_id, payload)
+def patch_habit(record_id: str, payload: HabitUpdate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    return update_record("habits", record_id, payload, user["id"])
 
 
 @app.delete("/api/habits/{record_id}", status_code=204)
-def remove_habit(record_id: str) -> Response:
-    return delete_record("habits", record_id)
+def remove_habit(record_id: str, user: dict[str, Any] = Depends(require_user)) -> Response:
+    return delete_record("habits", record_id, user["id"])
 
 
 @app.put("/api/habits/{habit_id}/check-ins")
-def put_habit_check_in(habit_id: str, payload: HabitCheckIn) -> dict[str, Any]:
+def put_habit_check_in(
+    habit_id: str, payload: HabitCheckIn, user: dict[str, Any] = Depends(require_user)
+) -> dict[str, Any]:
     with transaction() as connection:
-        get_record(connection, "habits", habit_id)
+        get_record(connection, "habits", habit_id, user["id"])
         existing = connection.execute(
-            "SELECT id FROM habit_entries WHERE habit_id = ? AND entry_date = ?",
-            (habit_id, payload.entry_date),
+            "SELECT id FROM habit_entries WHERE user_id = ? AND habit_id = ? AND entry_date = ?",
+            (user["id"], habit_id, payload.entry_date),
         ).fetchone()
         entry_id = existing["id"] if existing else new_id()
         connection.execute(
             """
-            INSERT INTO habit_entries(id, habit_id, entry_date, completed, value, note, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO habit_entries(id, user_id, habit_id, entry_date, completed, value, note, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(habit_id, entry_date) DO UPDATE SET
                 completed = excluded.completed, value = excluded.value, note = excluded.note
             """,
-            (entry_id, habit_id, payload.entry_date, int(payload.completed), payload.value, payload.note, now_iso()),
+            (
+                entry_id,
+                user["id"],
+                habit_id,
+                payload.entry_date,
+                int(payload.completed),
+                payload.value,
+                payload.note,
+                now_iso(),
+            ),
         )
-        record = row_to_dict(connection.execute("SELECT * FROM habit_entries WHERE id = ?", (entry_id,)).fetchone())
+        record = row_to_dict(
+            connection.execute(
+                "SELECT * FROM habit_entries WHERE id = ? AND user_id = ?", (entry_id, user["id"])
+            ).fetchone()
+        )
         return record or {}
 
 
 @app.get("/api/reminders")
-def list_reminders(enabled: bool | None = None) -> list[dict[str, Any]]:
+def list_reminders(enabled: bool | None = None, user: dict[str, Any] = Depends(require_user)) -> list[dict[str, Any]]:
     with connect() as connection:
         if enabled is None:
-            return all_rows(connection, "SELECT * FROM reminders ORDER BY remind_at")
-        return all_rows(connection, "SELECT * FROM reminders WHERE enabled = ? ORDER BY remind_at", (int(enabled),))
+            return all_rows(connection, "SELECT * FROM reminders WHERE user_id = ? ORDER BY remind_at", (user["id"],))
+        return all_rows(
+            connection,
+            "SELECT * FROM reminders WHERE user_id = ? AND enabled = ? ORDER BY remind_at",
+            (user["id"], int(enabled)),
+        )
 
 
 @app.post("/api/reminders", status_code=201)
-def post_reminder(payload: ReminderCreate) -> dict[str, Any]:
-    return create_record("reminders", payload)
+def post_reminder(payload: ReminderCreate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    return create_record("reminders", payload, user["id"])
 
 
 @app.patch("/api/reminders/{record_id}")
-def patch_reminder(record_id: str, payload: ReminderUpdate) -> dict[str, Any]:
-    return update_record("reminders", record_id, payload)
+def patch_reminder(
+    record_id: str, payload: ReminderUpdate, user: dict[str, Any] = Depends(require_user)
+) -> dict[str, Any]:
+    return update_record("reminders", record_id, payload, user["id"])
 
 
 @app.delete("/api/reminders/{record_id}", status_code=204)
-def remove_reminder(record_id: str) -> Response:
-    return delete_record("reminders", record_id)
+def remove_reminder(record_id: str, user: dict[str, Any] = Depends(require_user)) -> Response:
+    return delete_record("reminders", record_id, user["id"])
 
 
 @app.get("/api/dashboard")
-def dashboard(selected_date: str | None = Query(default=None, alias="date")) -> dict[str, Any]:
+def dashboard(
+    selected_date: str | None = Query(default=None, alias="date"),
+    user: dict[str, Any] = Depends(require_user),
+) -> dict[str, Any]:
     target = date.fromisoformat(selected_date) if selected_date else date.today()
     day_name = target.strftime("%A").lower()
     with connect() as connection:
@@ -447,28 +504,52 @@ def dashboard(selected_date: str | None = Query(default=None, alias="date")) -> 
             connection,
             """
             SELECT * FROM tasks
-            WHERE scheduled_date = ? OR due_date = ? OR (due_date < ? AND status NOT IN ('done', 'archived'))
+            WHERE user_id = ? AND (
+                scheduled_date = ? OR due_date = ? OR (due_date < ? AND status NOT IN ('done', 'archived'))
+            )
             ORDER BY CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, due_date
             """,
-            (target.isoformat(), target.isoformat(), target.isoformat()),
+            (user["id"], target.isoformat(), target.isoformat(), target.isoformat()),
         )
         events = all_rows(
-            connection, "SELECT * FROM events WHERE event_date = ? ORDER BY start_time", (target.isoformat(),)
+            connection,
+            "SELECT * FROM events WHERE user_id = ? AND event_date = ? ORDER BY start_time",
+            (user["id"], target.isoformat()),
         )
         routine = [
             row
-            for row in all_rows(connection, "SELECT * FROM routine_blocks WHERE is_active = 1 ORDER BY start_time")
+            for row in all_rows(
+                connection,
+                "SELECT * FROM routine_blocks WHERE user_id = ? AND is_active = 1 ORDER BY start_time",
+                (user["id"],),
+            )
             if day_name in row["days"]
         ]
-        habits = all_rows(connection, "SELECT * FROM habits ORDER BY created_at")
-        checkins = all_rows(connection, "SELECT * FROM habit_entries WHERE entry_date = ?", (target.isoformat(),))
-        goals = all_rows(connection, "SELECT * FROM goals WHERE status = 'active' ORDER BY deadline")
+        habits = all_rows(connection, "SELECT * FROM habits WHERE user_id = ? ORDER BY created_at", (user["id"],))
+        checkins = all_rows(
+            connection,
+            "SELECT * FROM habit_entries WHERE user_id = ? AND entry_date = ?",
+            (user["id"], target.isoformat()),
+        )
+        goals = all_rows(
+            connection,
+            "SELECT * FROM goals WHERE user_id = ? AND status = 'active' ORDER BY deadline",
+            (user["id"],),
+        )
         reminders = all_rows(
             connection,
-            "SELECT * FROM reminders WHERE enabled = 1 AND remind_at >= ? AND remind_at < ? ORDER BY remind_at LIMIT 6",
-            (f"{target.isoformat()}T00:00", f"{(target + timedelta(days=7)).isoformat()}T00:00"),
+            """
+            SELECT * FROM reminders
+            WHERE user_id = ? AND enabled = 1 AND remind_at >= ? AND remind_at < ?
+            ORDER BY remind_at LIMIT 6
+            """,
+            (
+                user["id"],
+                f"{target.isoformat()}T00:00",
+                f"{(target + timedelta(days=7)).isoformat()}T00:00",
+            ),
         )
-        settings = settings_dict(connection)
+        settings = settings_dict(connection, user["id"])
     completed_task_count = sum(1 for task in tasks if task["status"] == "done")
     completed_habits = sum(1 for item in checkins if item["completed"])
     movement_minutes = sum(
@@ -503,19 +584,23 @@ def minutes_between(start_time: str, end_time: str) -> int:
 
 
 @app.get("/api/insights")
-def insights(start: str | None = None, end: str | None = None) -> dict[str, Any]:
+def insights(
+    start: str | None = None,
+    end: str | None = None,
+    user: dict[str, Any] = Depends(require_user),
+) -> dict[str, Any]:
     end_date = date.fromisoformat(end) if end else date.today()
     start_date = date.fromisoformat(start) if start else end_date - timedelta(days=6)
     days = [(start_date + timedelta(days=index)) for index in range((end_date - start_date).days + 1)]
     with connect() as connection:
-        tasks = all_rows(connection, "SELECT * FROM tasks")
+        tasks = all_rows(connection, "SELECT * FROM tasks WHERE user_id = ?", (user["id"],))
         entries = all_rows(
             connection,
-            "SELECT * FROM habit_entries WHERE entry_date BETWEEN ? AND ?",
-            (start_date.isoformat(), end_date.isoformat()),
+            "SELECT * FROM habit_entries WHERE user_id = ? AND entry_date BETWEEN ? AND ?",
+            (user["id"], start_date.isoformat(), end_date.isoformat()),
         )
-        habits = all_rows(connection, "SELECT * FROM habits")
-        goals = all_rows(connection, "SELECT * FROM goals")
+        habits = all_rows(connection, "SELECT * FROM habits WHERE user_id = ?", (user["id"],))
+        goals = all_rows(connection, "SELECT * FROM goals WHERE user_id = ?", (user["id"],))
     daily = []
     for current in days:
         day_key = current.isoformat()
@@ -555,15 +640,21 @@ EXPORT_TABLES = ["routine_blocks", "tasks", "events", "goals", "habits", "habit_
 
 
 @app.get("/api/export")
-def export_data() -> dict[str, Any]:
+def export_data(user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
     with connect() as connection:
-        result = {table: all_rows(connection, f"SELECT * FROM {table}") for table in EXPORT_TABLES}
-        result["settings"] = settings_dict(connection)
-    return {"version": 1, "exported_at": now_iso(), "data": result}
+        result = {
+            table: all_rows(connection, f"SELECT * FROM {table} WHERE user_id = ?", (user["id"],))
+            for table in EXPORT_TABLES
+        }
+        for rows in result.values():
+            for row in rows:
+                row.pop("user_id", None)
+        result["settings"] = settings_dict(connection, user["id"])
+    return {"version": 2, "exported_at": now_iso(), "data": result}
 
 
 @app.post("/api/import")
-def import_data(payload: ImportRequest) -> dict[str, Any]:
+def import_data(payload: ImportRequest, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
     data = payload.data.get("data", payload.data)
     with transaction() as connection:
         if payload.mode == "replace":
@@ -575,18 +666,23 @@ def import_data(payload: ImportRequest) -> dict[str, Any]:
                 "goals",
                 "habits",
                 "routine_blocks",
-                "settings",
             ]:
-                connection.execute(f"DELETE FROM {table}")
+                connection.execute(f"DELETE FROM {table} WHERE user_id = ?", (user["id"],))
+            connection.execute("DELETE FROM user_settings WHERE user_id = ?", (user["id"],))
         settings = data.get("settings", {})
         if isinstance(settings, dict):
             for key, value in settings.items():
                 connection.execute(
-                    "INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                    (str(key), json.dumps(value)),
+                    """
+                    INSERT INTO user_settings(user_id, key, value) VALUES (?, ?, ?)
+                    ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value
+                    """,
+                    (user["id"], str(key), json.dumps(value)),
                 )
         imported = 0
+        id_maps: dict[str, dict[str, str]] = {}
         for table in EXPORT_TABLES:
+            id_maps[table] = {}
             rows = data.get(table, [])
             if not isinstance(rows, list):
                 continue
@@ -598,7 +694,15 @@ def import_data(payload: ImportRequest) -> dict[str, Any]:
                     continue
                 row = {key: value for key, value in raw.items() if key in allowed}
                 row.setdefault("id", new_id())
+                original_id = str(row["id"])
+                existing = connection.execute(f"SELECT user_id FROM {table} WHERE id = ?", (original_id,)).fetchone()
+                if existing and existing["user_id"] != user["id"]:
+                    row["id"] = new_id()
+                id_maps[table][original_id] = str(row["id"])
+                if table == "habit_entries" and str(row.get("habit_id", "")) in id_maps.get("habits", {}):
+                    row["habit_id"] = id_maps["habits"][str(row["habit_id"])]
                 row.setdefault("created_at", now_iso())
+                row["user_id"] = user["id"]
                 for key in JSON_FIELDS:
                     if key in row and not isinstance(row[key], str):
                         row[key] = json.dumps(row[key])
@@ -620,9 +724,10 @@ def import_data(payload: ImportRequest) -> dict[str, Any]:
 
 
 @app.post("/api/system/reset")
-def reset_system() -> dict[str, str]:
+def reset_system(user: dict[str, Any] = Depends(require_user)) -> dict[str, str]:
     with transaction() as connection:
-        for table in ["habit_entries", "reminders", "tasks", "events", "goals", "habits", "routine_blocks", "settings"]:
-            connection.execute(f"DELETE FROM {table}")
-        seed_database(connection)
+        for table in ["habit_entries", "reminders", "tasks", "events", "goals", "habits", "routine_blocks"]:
+            connection.execute(f"DELETE FROM {table} WHERE user_id = ?", (user["id"],))
+        connection.execute("DELETE FROM user_settings WHERE user_id = ?", (user["id"],))
+        seed_database(connection, user["id"], user["username"])
     return {"status": "ok", "message": "Sample planner data restored"}

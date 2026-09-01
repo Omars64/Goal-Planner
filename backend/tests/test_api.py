@@ -139,7 +139,7 @@ def test_export_import_round_trip(client):
     exported = client.get("/api/export")
     assert exported.status_code == 200
     snapshot = exported.json()
-    assert snapshot["version"] == 1
+    assert snapshot["version"] == 2
     assert snapshot["data"]["routine_blocks"]
 
     imported = client.post("/api/import", json={"mode": "replace", "data": snapshot})

@@ -4,10 +4,23 @@ import test from "node:test";
 
 test("exposes every requested top-panel planner page", async () => {
   const source = await readFile(new URL("../components/planner/PlannerApp.tsx", import.meta.url), "utf8");
-  for (const label of ["Time table", "Schedule", "To-do", "Goals", "Habits", "Reminders", "Insights", "Settings"]) {
+  for (const label of ["Time table", "Schedule", "To-do", "Goals", "Habits", "Reminders", "Insights", "Admin", "Settings"]) {
     assert.match(source, new RegExp(`label: \\"${label}\\"`));
   }
   assert.match(source, /top-navigation/);
+});
+
+test("ships verified authentication and role-gated administration", async () => {
+  const app = await readFile(new URL("../components/planner/PlannerApp.tsx", import.meta.url), "utf8");
+  const auth = await readFile(new URL("../components/planner/AuthScreen.tsx", import.meta.url), "utf8");
+  const admin = await readFile(new URL("../components/planner/pages/AdminDashboardPage.tsx", import.meta.url), "utf8");
+  const api = await readFile(new URL("../backend/app/auth.py", import.meta.url), "utf8");
+  assert.match(app, /user\?\.role === "admin"/);
+  assert.match(auth, /verifyEmail/);
+  assert.match(auth, /InputOTP/);
+  assert.match(admin, /adminResetPassword/);
+  assert.match(api, /require_admin/);
+  assert.match(api, /httponly=True/);
 });
 
 test("ships backend, containers, CI workflows, and supplied icon", async () => {

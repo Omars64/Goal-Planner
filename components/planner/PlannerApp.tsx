@@ -11,7 +11,10 @@ import {
   CloudOff,
   Goal,
   HeartPulse,
+  LoaderCircle,
+  LogOut,
   Menu,
+  ShieldCheck,
   Settings2,
   Wifi,
   X,
@@ -23,22 +26,24 @@ import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 
 import { api } from "./api";
+import { AuthScreen } from "./AuthScreen";
 import { formatDateTime } from "./date";
 import { DashboardPage } from "./pages/DashboardPage";
 import { GoalsPage } from "./pages/GoalsPage";
 import { HabitsPage } from "./pages/HabitsPage";
 import { InsightsPage } from "./pages/InsightsPage";
+import { AdminDashboardPage } from "./pages/AdminDashboardPage";
 import { RemindersPage } from "./pages/RemindersPage";
 import { SchedulePage } from "./pages/SchedulePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TimetablePage } from "./pages/TimetablePage";
 import { TodosPage } from "./pages/TodosPage";
-import type { PageKey, PlannerSettings, Reminder } from "./types";
+import type { AuthUser, PageKey, PlannerSettings, Reminder } from "./types";
 
 
 const APP_ICON = "/goal-planner-icon.png";
 
-const NAVIGATION: Array<{ key: PageKey; label: string; icon: typeof CircleGauge }> = [
+const BASE_NAVIGATION: Array<{ key: PageKey; label: string; icon: typeof CircleGauge }> = [
   { key: "dashboard", label: "Overview", icon: CircleGauge },
   { key: "timetable", label: "Time table", icon: CalendarClock },
   { key: "schedule", label: "Schedule", icon: CalendarDays },
@@ -50,10 +55,10 @@ const NAVIGATION: Array<{ key: PageKey; label: string; icon: typeof CircleGauge 
   { key: "settings", label: "Settings", icon: Settings2 },
 ];
 
-function pageFromHash(): PageKey {
+function pageFromHash(navigation: typeof BASE_NAVIGATION): PageKey {
   if (typeof window === "undefined") return "dashboard";
   const value = window.location.hash.replace("#", "") as PageKey;
-  return NAVIGATION.some((item) => item.key === value) ? value : "dashboard";
+  return navigation.some((item) => item.key === value) ? value : "dashboard";
 }
 
 function nextReminderDate(reminder: Reminder): string | null {
@@ -101,7 +106,12 @@ export function PlannerApp() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [online, setOnline] = useState<boolean | null>(null);
   const [settings, setSettings] = useState<PlannerSettings | null>(null);
-  const activePage = NAVIGATION.find((item) => item.key === page) || NAVIGATION[0];
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const navigation = useMemo(() => user?.role === "admin"
+    ? [...BASE_NAVIGATION.slice(0, -1), { key: "admin" as const, label: "Admin", icon: ShieldCheck }, BASE_NAVIGATION.at(-1)!]
+    : BASE_NAVIGATION, [user?.role]);
+  const activePage = navigation.find((item) => item.key === page) || navigation[0];
 
   const navigate = (target: PageKey) => {
     setPage(target);
@@ -111,10 +121,17 @@ export function PlannerApp() {
   };
 
   useEffect(() => {
-    const handleHash = () => setPage(pageFromHash());
+    const handleHash = () => setPage(pageFromHash(navigation));
     queueMicrotask(handleHash);
     window.addEventListener("hashchange", handleHash);
     return () => window.removeEventListener("hashchange", handleHash);
+  }, [navigation]);
+
+  useEffect(() => {
+    api.me()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setAuthLoading(false));
   }, []);
 
   useEffect(() => {
@@ -132,24 +149,25 @@ export function PlannerApp() {
   }, []);
 
   useEffect(() => {
+    if (!user || online !== true) return;
     api.settings().then(setSettings).catch(() => undefined);
-  }, [online]);
+  }, [online, user]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (!event.altKey || event.ctrlKey || event.metaKey) return;
       const index = Number(event.key) - 1;
-      if (index >= 0 && index < NAVIGATION.length) {
+      if (index >= 0 && index < navigation.length) {
         event.preventDefault();
-        navigate(NAVIGATION[index].key);
+        navigate(navigation[index].key);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [navigation]);
 
   useEffect(() => {
-    if (!settings?.notifications_enabled || online !== true) return;
+    if (!user || !settings?.notifications_enabled || online !== true) return;
     const checkReminders = async () => {
       try {
         const reminders = await api.reminders();
@@ -174,7 +192,29 @@ export function PlannerApp() {
     void checkReminders();
     const interval = window.setInterval(checkReminders, 30_000);
     return () => window.clearInterval(interval);
-  }, [settings?.notifications_enabled, online]);
+  }, [settings?.notifications_enabled, online, user]);
+
+  const authenticated = (nextUser: AuthUser, message: string) => {
+    setUser(nextUser);
+    setAuthLoading(false);
+    setPage("dashboard");
+    window.location.hash = "dashboard";
+    toast.success(message, { description: "Your private planner is ready." });
+  };
+
+  const logout = async () => {
+    try {
+      const result = await api.logout();
+      toast.success(result.message);
+    } catch (caught) {
+      toast.error("Could not complete sign out", { description: caught instanceof Error ? caught.message : "Please try again" });
+    } finally {
+      setUser(null);
+      setSettings(null);
+      setMobileNavOpen(false);
+      window.location.hash = "";
+    }
+  };
 
   const pageComponent = useMemo(() => {
     switch (page) {
@@ -185,10 +225,19 @@ export function PlannerApp() {
       case "habits": return <HabitsPage />;
       case "reminders": return <RemindersPage />;
       case "insights": return <InsightsPage />;
-      case "settings": return <SettingsPage onSettingsChanged={setSettings} />;
+      case "admin": return user?.role === "admin" ? <AdminDashboardPage currentUser={user} /> : <DashboardPage onNavigate={navigate} />;
+      case "settings": return user ? <SettingsPage currentUser={user} onSettingsChanged={setSettings} /> : null;
       default: return <DashboardPage onNavigate={navigate} />;
     }
-  }, [page]);
+  }, [page, user]);
+
+  if (authLoading) {
+    return <div className="vice-app auth-loading"><LoaderCircle className="spin" /><span>Securing your planner...</span><Toaster theme="dark" position="top-right" richColors closeButton /></div>;
+  }
+
+  if (!user) {
+    return <div className="vice-app"><AuthScreen onAuthenticated={authenticated} /><Toaster theme="dark" position="top-right" richColors closeButton /></div>;
+  }
 
   return (
     <div className={`vice-app ${settings?.compact_mode ? "compact-mode" : ""}`}>
@@ -199,9 +248,8 @@ export function PlannerApp() {
           <Image src={APP_ICON} alt="" width={42} height={42} unoptimized />
           <div><strong>GOAL</strong><span>PLANNER</span></div>
         </div>
-        <button className="mobile-menu-button" aria-label="Open page menu" onClick={() => setMobileNavOpen(true)}><Menu /></button>
         <nav className="top-navigation" aria-label="Planner pages">
-          {NAVIGATION.map((item, index) => {
+          {navigation.map((item, index) => {
             const Icon = item.icon;
             return (
               <button
@@ -216,8 +264,13 @@ export function PlannerApp() {
             );
           })}
         </nav>
-        <div className={`connection-status ${online ? "is-online" : online === false ? "is-offline" : ""}`} title={online ? "Python backend connected" : "Python backend unavailable"}>
-          {online ? <Wifi /> : <CloudOff />}<span>{online ? "Synced" : online === false ? "Offline" : "Checking"}</span>
+        <div className="header-tools">
+          <div className="account-chip" title={`${user.username} · ${user.role}`}><span>{user.username.slice(0, 2).toUpperCase()}</span><div><strong>{user.username}</strong><small>{user.role}</small></div></div>
+          <div className={`connection-status ${online ? "is-online" : online === false ? "is-offline" : ""}`} title={online ? "Python backend connected" : "Python backend unavailable"}>
+            {online ? <Wifi /> : <CloudOff />}<span>{online ? "Synced" : online === false ? "Offline" : "Checking"}</span>
+          </div>
+          <button className="logout-button" aria-label="Sign out" title="Sign out" onClick={() => void logout()}><LogOut /></button>
+          <button className="mobile-menu-button" aria-label="Open page menu" onClick={() => setMobileNavOpen(true)}><Menu /></button>
         </div>
       </header>
 
@@ -240,8 +293,9 @@ export function PlannerApp() {
         <aside>
           <header><div className="brand-lockup"><Image src={APP_ICON} alt="" width={38} height={38} unoptimized /><div><strong>GOAL</strong><span>PLANNER</span></div></div><button aria-label="Close page menu" onClick={() => setMobileNavOpen(false)}><X /></button></header>
           <nav aria-label="Mobile planner pages">
-            {NAVIGATION.map((item) => { const Icon = item.icon; return <button key={item.key} className={page === item.key ? "active" : ""} onClick={() => navigate(item.key)}><Icon /><span>{item.label}</span></button>; })}
+            {navigation.map((item) => { const Icon = item.icon; return <button key={item.key} className={page === item.key ? "active" : ""} onClick={() => navigate(item.key)}><Icon /><span>{item.label}</span></button>; })}
           </nav>
+          <div className="mobile-account"><div><strong>{user.username}</strong><small>{user.email}</small></div><Button variant="outline" onClick={() => void logout()}><LogOut />Sign out</Button></div>
         </aside>
       </div>
 

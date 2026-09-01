@@ -51,6 +51,9 @@ backend/.pytest_cache/
 backend/.ruff_cache/
 backend/.coverage
 backend/htmlcov/
+backend/.test-*/
+backend/work/
+/.pytest-auth/
 backend/data/*.db
 backend/data/*.db-shm
 backend/data/*.db-wal
