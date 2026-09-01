@@ -96,6 +96,8 @@ export const api = {
       `/admin/users/${id}/password`,
       json("PUT", { new_password: newPassword }),
     ),
+  adminDeleteUser: (id: string) =>
+    request<{ message: string; deleted_user_id: string }>(`/admin/users/${id}`, { method: "DELETE" }),
   dashboard: (date: string) => request<DashboardData>(`/dashboard?date=${encodeURIComponent(date)}`),
   insights: (start?: string, end?: string) => {
     const params = new URLSearchParams();

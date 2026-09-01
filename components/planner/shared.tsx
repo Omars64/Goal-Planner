@@ -111,11 +111,15 @@ export function ConfirmDelete({
   onOpenChange,
   itemName,
   onConfirm,
+  description = "This removes it from your planner permanently. This action cannot be undone.",
+  confirmLabel = "Delete",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   itemName: string;
   onConfirm: () => void | Promise<void>;
+  description?: string;
+  confirmLabel?: string;
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -123,11 +127,11 @@ export function ConfirmDelete({
         <AlertDialogHeader>
           <AlertDialogMedia><Trash2 /></AlertDialogMedia>
           <AlertDialogTitle>Delete {itemName}?</AlertDialogTitle>
-          <AlertDialogDescription>This removes it from your planner permanently. This action cannot be undone.</AlertDialogDescription>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Keep it</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={() => void onConfirm()}>Delete</AlertDialogAction>
+          <AlertDialogAction variant="destructive" onClick={() => void onConfirm()}>{confirmLabel}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

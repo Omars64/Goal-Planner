@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.database import (
     EMPTY_USER_WORKSPACES_MIGRATION,
+    OWNED_TABLES,
     cleanup_non_admin_starter_data,
     new_id,
     seed_database,
@@ -241,6 +242,82 @@ def test_admin_user_management_and_role_protection(client: TestClient) -> None:
             == 200
         )
         assert user_client.get("/api/admin/users").status_code == 403
+        assert user_client.delete(f"/api/admin/users/{managed['id']}").status_code == 403
+
+
+def test_admin_can_delete_user_and_owned_planner_data(client: TestClient) -> None:
+    created = client.post(
+        "/api/admin/users",
+        json={
+            "username": "Delete Me",
+            "email": "delete-me@example.com",
+            "password": "DeletePass123!",
+            "role": "user",
+        },
+    )
+    assert created.status_code == 201
+    user_id = created.json()["user"]["id"]
+
+    with transaction() as connection:
+        seed_database(connection, user_id, "Delete Me")
+        assert connection.execute("SELECT COUNT(*) AS count FROM tasks WHERE user_id = ?", (user_id,)).fetchone()[
+            "count"
+        ]
+
+    with TestClient(app) as deleted_user_client:
+        assert (
+            deleted_user_client.post(
+                "/api/auth/login", json={"email": "delete-me@example.com", "password": "DeletePass123!"}
+            ).status_code
+            == 200
+        )
+
+    admin = client.get("/api/auth/me").json()
+    assert client.delete(f"/api/admin/users/{admin['id']}").status_code == 400
+    assert client.delete("/api/admin/users/missing-user").status_code == 404
+
+    deleted = client.delete(f"/api/admin/users/{user_id}")
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted_user_id"] == user_id
+    assert "all associated planner data" in deleted.json()["message"]
+
+    with transaction() as connection:
+        assert (
+            connection.execute("SELECT COUNT(*) AS count FROM users WHERE id = ?", (user_id,)).fetchone()["count"] == 0
+        )
+        assert (
+            connection.execute("SELECT COUNT(*) AS count FROM user_settings WHERE user_id = ?", (user_id,)).fetchone()[
+                "count"
+            ]
+            == 0
+        )
+        assert (
+            connection.execute("SELECT COUNT(*) AS count FROM user_sessions WHERE user_id = ?", (user_id,)).fetchone()[
+                "count"
+            ]
+            == 0
+        )
+        for table in OWNED_TABLES:
+            assert (
+                connection.execute(f"SELECT COUNT(*) AS count FROM {table} WHERE user_id = ?", (user_id,)).fetchone()[
+                    "count"
+                ]
+                == 0
+            )
+
+    assert (
+        client.post(
+            "/api/auth/login", json={"email": "delete-me@example.com", "password": "DeletePass123!"}
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/api/auth/signup",
+            json={"username": "Reused Email", "email": "delete-me@example.com", "password": "ReusedPass123!"},
+        ).status_code
+        == 201
+    )
 
 
 def test_user_data_isolation(client: TestClient) -> None:

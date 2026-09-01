@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Eye, EyeOff, KeyRound, LoaderCircle, Pencil, Power, PowerOff, ShieldCheck, UserCheck, UserPlus, Users, UserX } from "lucide-react";
+import { Eye, EyeOff, KeyRound, LoaderCircle, Pencil, Power, PowerOff, ShieldCheck, Trash2, UserCheck, UserPlus, Users, UserX } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 
 import { api } from "../api";
 import { ProfileAvatar } from "../ProfileAvatar";
-import { EntityDialog, ErrorState, Field, LoadingState, PageHeader, Panel, useResource } from "../shared";
+import { ConfirmDelete, EntityDialog, ErrorState, Field, LoadingState, PageHeader, Panel, useResource } from "../shared";
 import type { AuthUser, UserRole } from "../types";
 
 type DialogMode = "create" | "edit" | "password" | null;
@@ -42,6 +42,7 @@ export function AdminDashboardPage({ currentUser }: { currentUser: AuthUser }) {
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<AuthUser | null>(null);
 
   const openCreate = () => {
     setSelected(null); setUsername(""); setEmail(""); setPassword(""); setRole("user"); setActive(true); setDialog("create");
@@ -105,6 +106,20 @@ export function AdminDashboardPage({ currentUser }: { currentUser: AuthUser }) {
     }
   };
 
+  const deleteUser = async () => {
+    if (!deleting || deleting.id === currentUser.id) return;
+    try {
+      const result = await api.adminDeleteUser(deleting.id);
+      toast.success("User deleted", { description: result.message });
+      setDeleting(null);
+      await resource.reload();
+    } catch (caught) {
+      toast.error("Could not delete user", {
+        description: caught instanceof Error ? caught.message : "Please try again",
+      });
+    }
+  };
+
   return (
     <div className="page-shell admin-page">
       <PageHeader eyebrow="Restricted access" title="Admin dashboard" description="Manage approved accounts, roles, profile details, and password access." actions={<Button className="neon-button" onClick={openCreate}><UserPlus />Create user</Button>} />
@@ -124,7 +139,12 @@ export function AdminDashboardPage({ currentUser }: { currentUser: AuthUser }) {
                 <ProfileAvatar name={user.username} image={user.profile_image} className="user-avatar" />
                 <div className="user-primary"><div><h2>{user.username}</h2>{user.id === currentUser.id ? <span className="you-pill">You</span> : null}<span className={`role-pill role-${user.role}`}>{user.role}</span><span className={`status-pill ${user.is_active ? "status-active" : "status-inactive"}`}>{user.is_active ? "Active" : "Inactive"}</span></div><a href={`mailto:${user.email}`}>{user.email}</a></div>
                 <dl><div><dt>Joined</dt><dd>{formatAccountDate(user.created_at)}</dd></div><div><dt>Last login</dt><dd>{formatAccountDate(user.last_login_at)}</dd></div></dl>
-                <div className="admin-user-actions"><Button variant="outline" onClick={() => openEdit(user)}><Pencil />Edit</Button><Button variant="outline" onClick={() => openPassword(user)}><KeyRound />Password</Button><Button variant="outline" disabled={user.id === currentUser.id || statusUpdating === user.id} onClick={() => void toggleStatus(user)}>{statusUpdating === user.id ? <LoaderCircle className="spin" /> : user.is_active ? <PowerOff /> : <Power />}{user.is_active ? "Deactivate" : "Reactivate"}</Button></div>
+                <div className="admin-user-actions">
+                  <Button variant="outline" onClick={() => openEdit(user)}><Pencil />Edit</Button>
+                  <Button variant="outline" onClick={() => openPassword(user)}><KeyRound />Password</Button>
+                  <Button variant="outline" disabled={user.id === currentUser.id || statusUpdating === user.id} onClick={() => void toggleStatus(user)}>{statusUpdating === user.id ? <LoaderCircle className="spin" /> : user.is_active ? <PowerOff /> : <Power />}{user.is_active ? "Deactivate" : "Reactivate"}</Button>
+                  <Button variant="destructive" disabled={user.id === currentUser.id} onClick={() => setDeleting(user)}><Trash2 />Delete</Button>
+                </div>
               </article>
             ))}
           </div>
@@ -143,6 +163,15 @@ export function AdminDashboardPage({ currentUser }: { currentUser: AuthUser }) {
       <EntityDialog open={dialog === "password"} onOpenChange={(open) => { if (!open) close(); }} title={`Reset ${selected?.username ?? "user"}'s password`} description="The user's other signed-in sessions will be closed after the password changes.">
         <form className="entity-form" onSubmit={resetPassword}><Field label="New password" hint="Use at least eight characters."><PasswordField value={password} onChange={setPassword} /></Field><div className="dialog-actions"><Button type="button" variant="outline" onClick={close}>Cancel</Button><Button className="neon-button" disabled={saving}><KeyRound />{saving ? "Updating..." : "Update password"}</Button></div></form>
       </EntityDialog>
+
+      <ConfirmDelete
+        open={Boolean(deleting)}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        itemName={`${deleting?.username ?? "user"}'s account`}
+        description="This permanently deletes the account, profile, sessions, settings, tasks, goals, habits, schedules, and reminders. This action cannot be undone."
+        confirmLabel="Delete user"
+        onConfirm={deleteUser}
+      />
     </div>
   );
 }

@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from .database import connect, new_id, now_iso, seed_user_settings, transaction
+from .database import OWNED_TABLES, connect, new_id, now_iso, seed_user_settings, transaction
 from .email_service import send_verification_email
 from .schemas import (
     AdminPasswordReset,
@@ -479,3 +479,21 @@ def reset_user_password(
         connection.execute("DELETE FROM user_sessions WHERE user_id = ? AND id <> ?", (user_id, admin["session_id"]))
         updated = dict(connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
     return {"message": "Password reset. The user's other sessions were signed out", "user": user_public(updated)}
+
+
+@router.delete("/admin/users/{user_id}")
+def delete_user(
+    user_id: str,
+    admin: dict[str, Any] = Depends(require_admin),
+) -> dict[str, str]:
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own account")
+    with transaction() as connection:
+        row = connection.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        for table in reversed(OWNED_TABLES):
+            connection.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
+        connection.execute("DELETE FROM user_settings WHERE user_id = ?", (user_id,))
+        connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    return {"message": f"{row['username']} and all associated planner data were deleted", "deleted_user_id": user_id}

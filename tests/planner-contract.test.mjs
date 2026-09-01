@@ -19,7 +19,10 @@ test("ships verified authentication and role-gated administration", async () => 
   assert.match(auth, /verifyEmail/);
   assert.match(auth, /InputOTP/);
   assert.match(admin, /adminResetPassword/);
+  assert.match(admin, /adminDeleteUser/);
+  assert.match(admin, /Delete user/);
   assert.match(api, /require_admin/);
+  assert.match(api, /@router\.delete\("\/admin\/users\/\{user_id\}"\)/);
   assert.match(api, /httponly=True/);
 });
 
