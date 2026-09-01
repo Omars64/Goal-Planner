@@ -201,7 +201,7 @@ export function FocusTimer() {
         const nextMode = mode === "focus" ? "break" : "focus";
         setMode(nextMode);
         const nextDuration = nextMode === "focus" ? 25 * 60 : 5 * 60;
-        toast.success(nextMode === "break" ? "Focus block complete — take five." : "Break complete — ready for the next mission.");
+        toast.success(nextMode === "break" ? "Focus block complete — take five." : "Break complete — ready for the next task.");
         return nextDuration;
       });
     }, 1000);

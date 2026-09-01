@@ -99,7 +99,7 @@ export function TodosPage() {
     try {
       if (editing) await api.updateTask(editing.id, payload);
       else await api.createTask(payload);
-      toast.success(editing ? "Mission updated" : "Mission added");
+      toast.success(editing ? "Task updated" : "Task added");
       setDialogOpen(false);
       await reload();
     } catch (caught) {
@@ -112,7 +112,7 @@ export function TodosPage() {
   const toggleDone = async (task: Task, done: boolean) => {
     try {
       await api.updateTask(task.id, { status: done ? "done" : "todo" });
-      toast.success(done ? "Mission complete" : "Mission reopened");
+      toast.success(done ? "Task complete" : "Task reopened");
       await reload();
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : "Could not update task");
@@ -123,7 +123,7 @@ export function TodosPage() {
     if (!deleting) return;
     try {
       await api.deleteTask(deleting.id);
-      toast.success("Mission deleted");
+      toast.success("Task deleted");
       setDeleting(null);
       await reload();
     } catch (caught) {
@@ -135,20 +135,20 @@ export function TodosPage() {
     <div className="page-shell todos-page">
       <PageHeader
         eyebrow="Capture, sort, complete"
-        title="To-do missions"
+        title="To-do tasks"
         description="Turn vague intentions into small, scheduled actions with priorities, estimates, tags, and recurrence."
-        actions={<Button className="neon-button" onClick={openCreate}><Plus /> Add mission</Button>}
+        actions={<Button className="neon-button" onClick={openCreate}><Plus /> Add task</Button>}
       />
 
       <div className="todo-stat-grid">
-        <article><ClipboardList /><div><span>Visible missions</span><strong>{counts.total}</strong></div></article>
+        <article><ClipboardList /><div><span>Visible tasks</span><strong>{counts.total}</strong></div></article>
         <article><CheckCircle2 /><div><span>Completed</span><strong>{counts.done}</strong></div></article>
         <article><Filter /><div><span>Urgent remaining</span><strong>{counts.urgent}</strong></div></article>
         <article><Clock3 /><div><span>Open workload</span><strong>{Math.floor(counts.minutes / 60)}h {counts.minutes % 60}m</strong></div></article>
       </div>
 
       <Panel className="todo-controls">
-        <div className="search-box"><Search /><Input aria-label="Search missions" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search title, notes, or tags…" /></div>
+        <div className="search-box"><Search /><Input aria-label="Search tasks" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search title, notes, or tags…" /></div>
         <div className="filter-tabs" role="tablist">
           {filters.map((filter) => <button role="tab" aria-selected={statusFilter === filter.value} key={filter.value} className={statusFilter === filter.value ? "active" : ""} onClick={() => setStatusFilter(filter.value)}>{filter.label}</button>)}
         </div>
@@ -158,7 +158,7 @@ export function TodosPage() {
         </Select>
       </Panel>
 
-      {loading && !data ? <LoadingState label="Loading missions…" /> : null}
+      {loading && !data ? <LoadingState label="Loading tasks…" /> : null}
       {error && !data ? <ErrorState message={error} onRetry={() => void reload()} /> : null}
       {data ? (
         <Panel className="todo-list-panel">
@@ -190,14 +190,14 @@ export function TodosPage() {
               })}
             </div>
           ) : (
-            <EmptyState icon={<CheckCircle2 />} title="No missions found" description="Change the filters or capture the next concrete action." action={<Button className="neon-button" onClick={openCreate}><Plus /> Add mission</Button>} />
+            <EmptyState icon={<CheckCircle2 />} title="No tasks found" description="Change the filters or capture the next concrete action." action={<Button className="neon-button" onClick={openCreate}><Plus /> Add task</Button>} />
           )}
         </Panel>
       ) : null}
 
-      <EntityDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editing ? "Edit mission" : "Add a mission"} description="Keep it specific enough that you can tell exactly when it is finished.">
+      <EntityDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editing ? "Edit task" : "Add a task"} description="Keep it specific enough that you can tell exactly when it is finished.">
         <form className="entity-form" onSubmit={save}>
-          <Field label="Mission title"><Input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Review pull request" /></Field>
+          <Field label="Task title"><Input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Review pull request" /></Field>
           <Field label="Notes"><Textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Definition of done, links, or context…" /></Field>
           <div className="form-grid three-columns">
             <Field label="Status">
@@ -219,12 +219,11 @@ export function TodosPage() {
             </Field>
             <Field label="Tags" hint="Separate tags with commas"><Input value={tagText} onChange={(event) => setTagText(event.target.value)} placeholder="coding, health, urgent" /></Field>
           </div>
-          <div className="dialog-actions"><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button><Button className="neon-button" disabled={saving}>{saving ? "Saving…" : editing ? "Save mission" : "Add mission"}</Button></div>
+          <div className="dialog-actions"><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button><Button className="neon-button" disabled={saving}>{saving ? "Saving…" : editing ? "Save task" : "Add task"}</Button></div>
         </form>
       </EntityDialog>
 
-      <ConfirmDelete open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)} itemName={deleting?.title || "mission"} onConfirm={remove} />
+      <ConfirmDelete open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)} itemName={deleting?.title || "task"} onConfirm={remove} />
     </div>
   );
 }
-

@@ -46,6 +46,18 @@ test("resumes pending verification and keeps toasts readable", async () => {
   assert.match(app, /duration=\{7000\}/);
 });
 
+test("uses practical task language throughout the planner", async () => {
+  const files = [
+    "../components/planner/pages/TodosPage.tsx",
+    "../components/planner/pages/DashboardPage.tsx",
+    "../components/planner/shared.tsx",
+  ];
+  const source = (await Promise.all(files.map((file) => readFile(new URL(file, import.meta.url), "utf8")))).join("\n");
+  assert.doesNotMatch(source, /\bmissions?\b/i);
+  assert.match(source, /Add task/);
+  assert.match(source, /Priority tasks/);
+});
+
 test("ships backend, containers, CI workflows, and supplied icon", async () => {
   const files = [
     "../backend/app/main.py",

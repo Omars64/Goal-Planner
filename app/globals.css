@@ -193,13 +193,13 @@ button:disabled { cursor: not-allowed; }
 .progress-ring strong { color: white; font-size: 18px; line-height: 1; }
 .progress-ring span { margin-top: 3px; color: #8e8a9f; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
 .dashboard-grid { display: grid; grid-template-columns: 1.1fr .95fr .8fr; gap: 16px; align-items: start; }
-.dashboard-missions { grid-row: span 2; }
+.dashboard-tasks { grid-row: span 2; }
 .dashboard-timeline { grid-row: span 2; }
-.mission-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-.mission-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 11px; padding: 12px; border: 1px solid rgba(255,255,255,.075); border-radius: 12px; background: rgba(255,255,255,.022); }
-.mission-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
-.mission-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.mission-copy span { color: #8f8ba2; font-size: 12px; text-transform: capitalize; }
+.task-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.task-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 11px; padding: 12px; border: 1px solid rgba(255,255,255,.075); border-radius: 12px; background: rgba(255,255,255,.022); }
+.task-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.task-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.task-copy span { color: #8f8ba2; font-size: 12px; text-transform: capitalize; }
 .priority-pill, .status-pill { display: inline-flex; align-items: center; justify-content: center; width: fit-content; min-height: 24px; padding: 4px 8px; border: 1px solid rgba(255,255,255,.1); border-radius: 999px; font-size: 12px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
 .priority-urgent { color: #ff697d; background: rgba(255,61,89,.08); border-color: rgba(255,61,89,.25); }
 .priority-high { color: #ffac68; background: rgba(255,138,61,.08); border-color: rgba(255,138,61,.25); }
@@ -626,7 +626,7 @@ button:disabled { cursor: not-allowed; }
   .account-chip { display: none; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .dashboard-grid { grid-template-columns: 1fr 1fr; }
-  .dashboard-missions, .dashboard-timeline { grid-row: auto; }
+  .dashboard-tasks, .dashboard-timeline { grid-row: auto; }
   .goal-card-grid { grid-template-columns: repeat(2, 1fr); }
 }
 

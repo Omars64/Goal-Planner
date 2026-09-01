@@ -54,7 +54,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: PageKey) => v
   const toggleTask = async (id: string, completed: boolean) => {
     try {
       await api.updateTask(id, { status: completed ? "done" : "todo" });
-      toast.success(completed ? "Mission completed" : "Task returned to the list");
+      toast.success(completed ? "Task completed" : "Task returned to the list");
       await reload();
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : "Could not update task");
@@ -104,7 +104,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: PageKey) => v
         </article>
         <article className="metric-card metric-violet">
           <ListChecks />
-          <div><span>Daily missions</span><strong>{data.metrics.tasks_completed}/{data.metrics.tasks_total}</strong><small>{taskRate}% cleared</small></div>
+          <div><span>Daily tasks</span><strong>{data.metrics.tasks_completed}/{data.metrics.tasks_total}</strong><small>{taskRate}% cleared</small></div>
         </article>
         <article className="metric-card metric-green">
           <Footprints />
@@ -118,20 +118,20 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: PageKey) => v
 
       <div className="dashboard-grid">
         <Panel
-          className="dashboard-missions"
-          title="Priority missions"
+          className="dashboard-tasks"
+          title="Priority tasks"
           action={<button className="text-action" onClick={() => onNavigate("todos")}>Open to-do <ArrowRight /></button>}
         >
           {incompleteTasks.length ? (
-            <div className="mission-list">
+            <div className="task-list">
               {incompleteTasks.map((task) => (
-                <article className="mission-row" key={task.id}>
+                <article className="task-row" key={task.id}>
                   <Checkbox
                     aria-label={`Complete ${task.title}`}
                     checked={task.status === "done"}
                     onCheckedChange={(checked) => void toggleTask(task.id, checked === true)}
                   />
-                  <div className="mission-copy">
+                  <div className="task-copy">
                     <strong>{task.title}</strong>
                     <span>{task.category} · {task.estimate_minutes} min</span>
                   </div>
@@ -140,9 +140,9 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: PageKey) => v
               ))}
             </div>
           ) : (
-            <div className="compact-empty"><CheckCircle2 /><div><strong>All clear</strong><span>No unfinished missions for this date.</span></div></div>
+            <div className="compact-empty"><CheckCircle2 /><div><strong>All clear</strong><span>No unfinished tasks for this date.</span></div></div>
           )}
-          <Button className="neon-button full-width" onClick={() => onNavigate("todos")}><CircleDashed /> Add or plan a mission</Button>
+          <Button className="neon-button full-width" onClick={() => onNavigate("todos")}><CircleDashed /> Add or plan a task</Button>
         </Panel>
 
         <Panel className="dashboard-timeline" title="Today’s route" action={<button className="text-action" onClick={() => onNavigate("timetable")}>Full timetable <ArrowRight /></button>}>
@@ -213,4 +213,3 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: PageKey) => v
     </div>
   );
 }
-
