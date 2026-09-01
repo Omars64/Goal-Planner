@@ -5,7 +5,13 @@ from datetime import UTC, datetime, timedelta
 from conftest import ADMIN_EMAIL, ADMIN_PASSWORD
 from fastapi.testclient import TestClient
 
-from app.database import transaction
+from app.database import (
+    EMPTY_USER_WORKSPACES_MIGRATION,
+    cleanup_non_admin_starter_data,
+    new_id,
+    seed_database,
+    transaction,
+)
 from app.main import app
 
 
@@ -56,7 +62,11 @@ def test_signup_verification_login_and_password_change(
     assert verified.status_code == 200
     assert verified.json()["user"]["role"] == "user"
     assert anonymous_client.get("/api/auth/me").json()["email"] == "new@example.com"
-    assert anonymous_client.get("/api/dashboard").status_code == 200
+    dashboard = anonymous_client.get("/api/dashboard")
+    assert dashboard.status_code == 200
+    for collection in ("tasks", "events", "routine", "habits", "goals", "reminders"):
+        assert dashboard.json()[collection] == []
+    assert dashboard.json()["settings"]["display_name"] == "New User"
 
     assert (
         anonymous_client.post(
@@ -130,6 +140,16 @@ def test_admin_user_management_and_role_protection(client: TestClient) -> None:
     managed = created.json()["user"]
     assert "password_hash" not in managed
 
+    with TestClient(app) as managed_client:
+        assert (
+            managed_client.post(
+                "/api/auth/login", json={"email": "managed@example.com", "password": "ManagedPass123!"}
+            ).status_code
+            == 200
+        )
+        for endpoint in ("tasks", "routine-blocks", "events", "goals", "habits", "reminders"):
+            assert managed_client.get(f"/api/{endpoint}").json() == []
+
     listing = client.get("/api/admin/users")
     assert listing.status_code == 200
     assert listing.json()["total"] == 2
@@ -181,6 +201,47 @@ def test_user_data_isolation(client: TestClient) -> None:
     admin_titles = {task["title"] for task in client.get("/api/tasks").json()}
     assert "Admin-only task" in admin_titles
     assert "User-only task" not in admin_titles
+
+
+def test_cleanup_removes_only_legacy_starter_batches(client: TestClient) -> None:
+    created = client.post(
+        "/api/admin/users",
+        json={
+            "username": "Legacy User",
+            "email": "legacy@example.com",
+            "password": "LegacyPass123!",
+            "role": "user",
+        },
+    )
+    assert created.status_code == 201
+    user_id = created.json()["user"]["id"]
+
+    with transaction() as connection:
+        seed_database(connection, user_id, "Legacy User")
+        connection.execute(
+            """
+            INSERT INTO tasks(
+                id, user_id, title, status, priority, category, estimate_minutes,
+                tags, recurring_rule, created_at
+            ) VALUES (?, ?, ?, 'todo', 'medium', 'personal', 30, '[]', 'none', ?)
+            """,
+            (new_id(), user_id, "Keep this user task", "2099-01-01T00:00:00+00:00"),
+        )
+        connection.execute("DELETE FROM app_migrations WHERE name = ?", (EMPTY_USER_WORKSPACES_MIGRATION,))
+        admin_id = connection.execute("SELECT id FROM users WHERE role = 'admin'").fetchone()["id"]
+        cleanup_non_admin_starter_data(connection, admin_id)
+
+        tasks = connection.execute("SELECT title FROM tasks WHERE user_id = ? ORDER BY title", (user_id,)).fetchall()
+        assert [row["title"] for row in tasks] == ["Keep this user task"]
+        for table in ("routine_blocks", "goals", "habits", "reminders"):
+            count = connection.execute(
+                f"SELECT COUNT(*) AS count FROM {table} WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            assert count["count"] == 0
+        admin_routine_count = connection.execute(
+            "SELECT COUNT(*) AS count FROM routine_blocks WHERE user_id = ?", (admin_id,)
+        ).fetchone()
+        assert admin_routine_count["count"] > 0
 
 
 def test_bootstrap_admin_credentials(client: TestClient) -> None:

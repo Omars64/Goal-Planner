@@ -166,6 +166,11 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS app_migrations (
+    name TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS routine_blocks (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -269,6 +274,7 @@ CREATE INDEX IF NOT EXISTS idx_verification_codes_user ON email_verification_cod
 """
 
 OWNED_TABLES = ["routine_blocks", "tasks", "events", "goals", "habits", "habit_entries", "reminders"]
+EMPTY_USER_WORKSPACES_MIGRATION = "2026-09-01-empty-user-workspaces"
 
 
 def column_exists(connection: DatabaseConnection, table: str, column: str) -> bool:
@@ -335,6 +341,46 @@ def migrate_user_ownership(connection: DatabaseConnection, admin_id: str) -> Non
             )
 
 
+def cleanup_non_admin_starter_data(connection: DatabaseConnection, admin_id: str) -> None:
+    applied = connection.execute(
+        "SELECT 1 FROM app_migrations WHERE name = ?", (EMPTY_USER_WORKSPACES_MIGRATION,)
+    ).fetchone()
+    if applied:
+        return
+
+    starter_batches = connection.execute(
+        """
+        SELECT DISTINCT goals.user_id, goals.created_at
+        FROM goals
+        JOIN tasks ON tasks.user_id = goals.user_id AND tasks.created_at = goals.created_at
+        JOIN reminders ON reminders.user_id = goals.user_id AND reminders.created_at = goals.created_at
+        WHERE goals.user_id <> ?
+          AND goals.title = 'Consistent movement week'
+          AND tasks.title = 'Choose today''s top three priorities'
+          AND reminders.title = 'Movement reset'
+        """,
+        (admin_id,),
+    ).fetchall()
+
+    for batch in starter_batches:
+        parameters = (batch["user_id"], batch["created_at"])
+        connection.execute(
+            """
+            DELETE FROM habit_entries
+            WHERE user_id = ?
+              AND habit_id IN (SELECT id FROM habits WHERE user_id = ? AND created_at = ?)
+            """,
+            (batch["user_id"], batch["user_id"], batch["created_at"]),
+        )
+        for table in ("routine_blocks", "tasks", "events", "goals", "reminders", "habits"):
+            connection.execute(f"DELETE FROM {table} WHERE user_id = ? AND created_at = ?", parameters)
+
+    connection.execute(
+        "INSERT INTO app_migrations(name, applied_at) VALUES (?, ?)",
+        (EMPTY_USER_WORKSPACES_MIGRATION, now_iso()),
+    )
+
+
 def init_db() -> None:
     with transaction() as connection:
         if connection.is_postgres:
@@ -342,6 +388,7 @@ def init_db() -> None:
         connection.executescript(SCHEMA)
         admin = bootstrap_admin(connection)
         migrate_user_ownership(connection, admin["id"])
+        cleanup_non_admin_starter_data(connection, admin["id"])
         row = connection.execute(
             "SELECT COUNT(*) AS count FROM routine_blocks WHERE user_id = ?", (admin["id"],)
         ).fetchone()
@@ -349,9 +396,7 @@ def init_db() -> None:
             seed_database(connection, admin["id"], admin["username"])
 
 
-def seed_database(connection: DatabaseConnection, user_id: str, display_name: str = "User") -> None:
-    today = date.today()
-    created = now_iso()
+def seed_user_settings(connection: DatabaseConnection, user_id: str, display_name: str = "User") -> None:
     settings: dict[str, Any] = {
         "display_name": display_name,
         "timezone": "Asia/Kuwait",
@@ -364,9 +409,18 @@ def seed_database(connection: DatabaseConnection, user_id: str, display_name: st
         "notifications_enabled": False,
     }
     connection.executemany(
-        "INSERT INTO user_settings(user_id, key, value) VALUES (?, ?, ?)",
+        """
+        INSERT INTO user_settings(user_id, key, value) VALUES (?, ?, ?)
+        ON CONFLICT(user_id, key) DO NOTHING
+        """,
         [(user_id, key, json.dumps(value)) for key, value in settings.items()],
     )
+
+
+def seed_database(connection: DatabaseConnection, user_id: str, display_name: str = "User") -> None:
+    seed_user_settings(connection, user_id, display_name)
+    today = date.today()
+    created = now_iso()
 
     weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday"]
     routine = [

@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from .database import connect, new_id, now_iso, seed_database, transaction
+from .database import connect, new_id, now_iso, seed_user_settings, transaction
 from .email_service import send_verification_email
 from .schemas import (
     AdminPasswordReset,
@@ -221,17 +221,13 @@ def verify_email(payload: VerifyEmailRequest, response: Response) -> dict[str, A
         connection.execute(
             "UPDATE email_verification_codes SET consumed_at = ? WHERE id = ?", (verified, code_row["id"])
         )
-        planner_count = connection.execute(
-            "SELECT COUNT(*) AS count FROM routine_blocks WHERE user_id = ?", (user["id"],)
-        ).fetchone()
-        if planner_count["count"] == 0:
-            seed_database(connection, user["id"], user["username"])
+        seed_user_settings(connection, user["id"], user["username"])
         _, token = create_session(connection, user["id"])
         updated = dict(connection.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone())
     set_session_cookie(response, token)
     return {
         "status": "verified",
-        "message": "Email verified. Your planner is ready; start by reviewing today's priorities",
+        "message": "Email verified. Your empty planner is ready; start by adding your first priority",
         "user": user_public(updated),
     }
 
@@ -360,7 +356,7 @@ def create_user(payload: AdminUserCreate, _: dict[str, Any] = Depends(require_ad
                 created,
             ),
         )
-        seed_database(connection, user_id, payload.username)
+        seed_user_settings(connection, user_id, payload.username)
         user = dict(connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
     return {"message": "User created and approved", "user": user_public(user)}
 
