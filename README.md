@@ -87,7 +87,7 @@ npm ci
 npm run dev
 ```
 
-Copy `.env.example` to `.env.local`, replace the development admin password, and configure an SMTP account before testing signup emails. Production secrets belong in the hosting provider, never in Git.
+Copy `.env.example` to `.env.local`, replace the development admin password, and configure Brevo or SMTP before testing signup emails. Production secrets belong in the hosting provider, never in Git.
 
 ## Docker
 
@@ -161,9 +161,10 @@ The repository deploys as two Vercel projects connected to the same GitHub repos
 
 1. Import `backend/` as `goal-planner-api` and keep `main` as the production branch.
 2. Add a Neon Postgres integration to the API project so it injects `DATABASE_URL`.
-3. Add the required admin bootstrap and SMTP variables from `.env.example` to the API project as encrypted Production and Preview variables.
-4. Import the repository root as `goal-planner`. Its same-origin `/api` rewrite targets the stable API project URL.
-5. Deploy both projects. Vercel automatically builds each project when `main` changes.
+3. Add the required admin bootstrap variables from `.env.example` to the API project as encrypted Production and Preview variables.
+4. For free transactional email, create and verify a Brevo sender, then set `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, and `BREVO_FROM_NAME` on the API project. The free tier currently supports up to 300 sends per day. SMTP remains available for local development or rollback.
+5. Import the repository root as `goal-planner`. Its same-origin `/api` rewrite targets the stable API project URL.
+6. Deploy both projects. Vercel automatically builds each project when `main` changes.
 
 Schema creation and initial planner data are handled automatically on the first API request. Later pushes to GitHub create Vercel deployments without a local machine.
 
