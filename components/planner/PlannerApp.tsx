@@ -101,6 +101,10 @@ class PlannerErrorBoundary extends Component<{ children: ReactNode }, { error: E
   }
 }
 
+function PlannerToaster() {
+  return <Toaster theme="dark" position="top-center" duration={7000} richColors closeButton />;
+}
+
 
 export function PlannerApp() {
   const [page, setPage] = useState<PageKey>("dashboard");
@@ -187,7 +191,7 @@ export function PlannerApp() {
           const key = `vice-reminder:${reminder.id}:${reminder.remind_at}`;
           if (window.localStorage.getItem(key)) continue;
           window.localStorage.setItem(key, "shown");
-          toast.info(reminder.title, { description: reminder.body || formatDateTime(reminder.remind_at), duration: 12_000 });
+          toast.info(reminder.title, { description: reminder.body || formatDateTime(reminder.remind_at) });
           if (reminder.channel === "browser" && "Notification" in window && Notification.permission === "granted") {
             new Notification(reminder.title, { body: reminder.body, icon: APP_ICON });
           }
@@ -242,11 +246,11 @@ export function PlannerApp() {
   }, [page, user]);
 
   if (authLoading) {
-    return <div className="vice-app auth-loading"><LoaderCircle className="spin" /><span>Securing your planner...</span><Toaster theme="dark" position="top-right" richColors closeButton /></div>;
+    return <div className="vice-app auth-loading"><LoaderCircle className="spin" /><span>Securing your planner...</span><PlannerToaster /></div>;
   }
 
   if (!user) {
-    return <div className="vice-app"><AuthScreen onAuthenticated={authenticated} /><Toaster theme="dark" position="top-right" richColors closeButton /></div>;
+    return <div className="vice-app"><AuthScreen onAuthenticated={authenticated} /><PlannerToaster /></div>;
   }
 
   return (
@@ -309,7 +313,7 @@ export function PlannerApp() {
         </aside>
       </div>
 
-      <Toaster theme="dark" position="top-right" richColors closeButton />
+      <PlannerToaster />
     </div>
   );
 }

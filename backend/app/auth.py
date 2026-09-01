@@ -159,6 +159,8 @@ def deliver_verification_code(email: str, username: str, code: str) -> None:
 
 @router.post("/auth/signup", status_code=201)
 def signup(payload: SignupRequest) -> dict[str, Any]:
+    code: str | None = None
+    message = "Check your email for the six-digit verification code"
     with transaction() as connection:
         existing = connection.execute("SELECT * FROM users WHERE email = ?", (payload.email,)).fetchone()
         if existing:
@@ -170,27 +172,51 @@ def signup(payload: SignupRequest) -> dict[str, Any]:
                         "or sign up with a different email address"
                     ),
                 )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="An account with this email already exists. Sign in or request a new code",
+            if existing["email_verified_at"]:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="An account with this email already exists. Sign in to continue",
+                )
+
+            updated = now_iso()
+            connection.execute(
+                "UPDATE users SET username = ?, password_hash = ?, updated_at = ? WHERE id = ?",
+                (payload.username, hash_password(payload.password), updated, existing["id"]),
             )
-        created = now_iso()
-        user_id = new_id()
-        connection.execute(
-            """
-            INSERT INTO users(
-                id, username, email, password_hash, role, is_active, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 'user', 0, ?, ?)
-            """,
-            (user_id, payload.username, payload.email, hash_password(payload.password), created, created),
-        )
-        code = issue_verification_code(connection, user_id)
-    deliver_verification_code(payload.email, payload.username, code)
+            threshold = (
+                (datetime.now(UTC) - timedelta(seconds=VERIFICATION_RESEND_SECONDS)).replace(microsecond=0).isoformat()
+            )
+            recent = connection.execute(
+                """
+                SELECT id FROM email_verification_codes
+                WHERE user_id = ? AND consumed_at IS NULL AND created_at > ? AND expires_at > ?
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (existing["id"], threshold, now_iso()),
+            ).fetchone()
+            if recent:
+                message = "Enter the code already sent to your email, or resend it after one minute"
+            else:
+                code = issue_verification_code(connection, existing["id"])
+        else:
+            created = now_iso()
+            user_id = new_id()
+            connection.execute(
+                """
+                INSERT INTO users(
+                    id, username, email, password_hash, role, is_active, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 'user', 0, ?, ?)
+                """,
+                (user_id, payload.username, payload.email, hash_password(payload.password), created, created),
+            )
+            code = issue_verification_code(connection, user_id)
+    if code:
+        deliver_verification_code(payload.email, payload.username, code)
     return {
         "status": "verification_required",
         "email": payload.email,
         "expires_in": VERIFICATION_MINUTES * 60,
-        "message": "Check your email for the six-digit verification code",
+        "message": message,
     }
 
 

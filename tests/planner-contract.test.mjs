@@ -36,6 +36,16 @@ test("keeps inactive accounts manageable and supports personal images", async ()
   assert.match(app, /settings\.background_image/);
 });
 
+test("resumes pending verification and keeps toasts readable", async () => {
+  const app = await readFile(new URL("../components/planner/PlannerApp.tsx", import.meta.url), "utf8");
+  const auth = await readFile(new URL("../components/planner/AuthScreen.tsx", import.meta.url), "utf8");
+  const api = await readFile(new URL("../backend/app/auth.py", import.meta.url), "utf8");
+  assert.match(api, /code already sent/);
+  assert.match(auth, /setVerificationEmail\(email\.trim\(\)\.toLowerCase\(\)\)/);
+  assert.match(app, /position="top-center"/);
+  assert.match(app, /duration=\{7000\}/);
+});
+
 test("ships backend, containers, CI workflows, and supplied icon", async () => {
   const files = [
     "../backend/app/main.py",

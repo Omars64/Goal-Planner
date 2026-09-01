@@ -71,6 +71,13 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUs
       }
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Please try again";
+      const pendingVerification = mode === "login" && /verify your email/i.test(message);
+      if (pendingVerification) {
+        setVerificationEmail(email.trim().toLowerCase());
+        setCode("");
+        toast.info("Email verification required", { description: "Enter the six-digit code sent to your inbox." });
+        return;
+      }
       const deactivated = /deactivated|inactive/i.test(message);
       if (deactivated) setAccessMessage(message);
       toast.error(deactivated ? "Account access is disabled" : mode === "login" ? "Sign in failed" : "Could not create account", {

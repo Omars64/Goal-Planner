@@ -126,6 +126,44 @@ def test_resend_invalidates_old_code_and_is_rate_limited(
     )
 
 
+def test_repeated_signup_resumes_pending_verification(
+    anonymous_client: TestClient, email_outbox: list[dict[str, object]]
+) -> None:
+    first = anonymous_client.post(
+        "/api/auth/signup",
+        json={"username": "Pending User", "email": "pending@example.com", "password": "OriginalPass123!"},
+    )
+    assert first.status_code == 201
+    original_code = str(email_outbox[-1]["code"])
+    assert len(email_outbox) == 1
+
+    resumed = anonymous_client.post(
+        "/api/auth/signup",
+        json={"username": "Updated Pending", "email": "pending@example.com", "password": "UpdatedPass123!"},
+    )
+    assert resumed.status_code == 201
+    assert resumed.json()["status"] == "verification_required"
+    assert "code already sent" in resumed.json()["message"]
+    assert len(email_outbox) == 1
+
+    verified = anonymous_client.post("/api/auth/verify", json={"email": "pending@example.com", "code": original_code})
+    assert verified.status_code == 200
+    assert verified.json()["user"]["username"] == "Updated Pending"
+    assert anonymous_client.post("/api/auth/logout").status_code == 200
+    assert (
+        anonymous_client.post(
+            "/api/auth/login", json={"email": "pending@example.com", "password": "OriginalPass123!"}
+        ).status_code
+        == 401
+    )
+    assert (
+        anonymous_client.post(
+            "/api/auth/login", json={"email": "pending@example.com", "password": "UpdatedPass123!"}
+        ).status_code
+        == 200
+    )
+
+
 def test_admin_user_management_and_role_protection(client: TestClient) -> None:
     created = client.post(
         "/api/admin/users",
