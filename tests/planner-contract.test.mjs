@@ -18,9 +18,13 @@ test("provides private user feedback history and an administrator inbox", async 
   assert.match(page, /Previously sent feedback/);
   assert.match(page, /adminFeedback/);
   assert.match(page, /accept="image\/jpeg,image\/png,image\/webp"/);
-  assert.match(page, /<details className="feedback-card">/);
-  assert.match(page, /feedback-chevron/);
+  assert.match(page, /feedback-inbox/);
+  assert.match(page, /feedback-list-pane/);
+  assert.match(page, /selectedFeedback/);
+  assert.match(page, /feedback-image-dialog/);
   assert.match(page, /Image attached/);
+  const listItem = page.slice(page.indexOf("function FeedbackListItem"), page.indexOf("function FeedbackReader"));
+  assert.doesNotMatch(listItem, /item\.message/);
   assert.match(api, /@app\.get\("\/api\/admin\/feedback"\)/);
   assert.match(api, /WHERE feedback\.user_id = \?/);
 });

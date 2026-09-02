@@ -2,10 +2,11 @@
 
 import Image from "next/image";
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { ChevronDown, Clock3, ImageIcon, ImagePlus, Inbox, LoaderCircle, Mail, MessageSquareText, Send, UserRound, X } from "lucide-react";
+import { ChevronRight, Clock3, ImageIcon, ImagePlus, Inbox, LoaderCircle, Mail, MessageSquareText, Send, UserRound, X, ZoomIn } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -15,35 +16,47 @@ import { prepareImage } from "../image";
 import { EmptyState, ErrorState, Field, LoadingState, PageHeader, Panel, useResource } from "../shared";
 import type { AuthUser, PlannerFeedback } from "../types";
 
-function FeedbackCard({ item, adminView }: { item: PlannerFeedback; adminView: boolean }) {
+function FeedbackListItem({ item, selected, onSelect }: { item: PlannerFeedback; selected: boolean; onSelect: () => void }) {
   return (
-    <details className="feedback-card">
-      <summary>
-        <div className="feedback-summary-main">
-          <div className="feedback-identity">
-            <span><UserRound /></span>
-            <div>
-              <h2>{item.name}</h2>
-              <span className="feedback-email"><Mail />{item.email}</span>
-            </div>
+    <button className={`feedback-list-item ${selected ? "is-selected" : ""}`} type="button" aria-pressed={selected} onClick={onSelect}>
+      <span className="feedback-list-avatar"><UserRound /></span>
+      <span className="feedback-list-copy">
+        <strong>{item.name}</strong>
+        <span className="feedback-email"><Mail />{item.email}</span>
+        <time dateTime={item.created_at}><Clock3 />{formatDateTime(item.created_at)}</time>
+        {item.image ? <span className="feedback-attachment"><ImageIcon />Image attached</span> : null}
+      </span>
+      <ChevronRight className="feedback-list-chevron" aria-hidden="true" />
+    </button>
+  );
+}
+
+function FeedbackReader({ item, adminView, onClose, onZoom }: { item: PlannerFeedback; adminView: boolean; onClose: () => void; onZoom: (src: string, alt: string) => void }) {
+  return (
+    <article className="feedback-reader-message">
+      <header>
+        <div className="feedback-identity">
+          <span><UserRound /></span>
+          <div>
+            <p>Feedback from</p>
+            <h2>{item.name}</h2>
+            <a className="feedback-reader-email" href={`mailto:${item.email}`}><Mail />{item.email}</a>
           </div>
-          <p>{item.message}</p>
         </div>
-        <div className="feedback-summary-meta">
+        <div className="feedback-reader-actions">
           <time dateTime={item.created_at}><Clock3 />{formatDateTime(item.created_at)}</time>
-          {item.image ? <span className="feedback-attachment"><ImageIcon />Image attached</span> : null}
-          <ChevronDown className="feedback-chevron" aria-hidden="true" />
+          <Button variant="ghost" size="icon-sm" aria-label="Close feedback details" title="Close details" onClick={onClose}><X /></Button>
         </div>
-      </summary>
-      <div className="feedback-card-details">
-        {adminView ? (
-          <div className="feedback-account"><strong>Planner account</strong><span>{item.account_username} · {item.account_email}</span></div>
-        ) : null}
-        <a className="feedback-detail-email" href={`mailto:${item.email}`}><Mail />Email {item.name}</a>
-        <p>{item.message}</p>
-        {item.image ? <Image className="feedback-image" src={item.image} alt={`Attachment from ${item.name}`} width={560} height={360} unoptimized /> : null}
-      </div>
-    </details>
+      </header>
+      {adminView ? <div className="feedback-account"><strong>Planner account</strong><span>{item.account_username} · {item.account_email}</span></div> : null}
+      <p className="feedback-reader-body">{item.message}</p>
+      {item.image ? (
+        <button className="feedback-image-button" type="button" onClick={() => onZoom(item.image!, `Attachment from ${item.name}`)}>
+          <Image className="feedback-image" src={item.image} alt={`Attachment from ${item.name}`} width={560} height={360} unoptimized />
+          <span><ZoomIn />Open larger</span>
+        </button>
+      ) : null}
+    </article>
   );
 }
 
@@ -56,6 +69,8 @@ export function FeedbackPage({ currentUser }: { currentUser: AuthUser }) {
   const [image, setImage] = useState<string | null>(null);
   const [processingImage, setProcessingImage] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedFeedbackId, setSelectedFeedbackId] = useState<string | null>(null);
+  const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const imageInput = useRef<HTMLInputElement>(null);
 
   const chooseImage = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -90,6 +105,7 @@ export function FeedbackPage({ currentUser }: { currentUser: AuthUser }) {
   };
 
   const items = resource.data ?? [];
+  const selectedFeedback = items.find((item) => item.id === selectedFeedbackId) ?? null;
 
   return (
     <div className="page-shell feedback-page">
@@ -137,8 +153,34 @@ export function FeedbackPage({ currentUser }: { currentUser: AuthUser }) {
         {resource.loading && !resource.data ? <LoadingState label="Loading feedback..." /> : null}
         {resource.error && !resource.data ? <ErrorState message={resource.error} onRetry={() => void resource.reload()} /> : null}
         {resource.data && items.length === 0 ? <EmptyState icon={<MessageSquareText />} title="No feedback yet" description={adminView ? "User submissions will appear here as soon as they arrive." : "Once you send feedback, you can review it here."} /> : null}
-        {items.length > 0 ? <div className="feedback-list">{items.map((item) => <FeedbackCard key={item.id} item={item} adminView={adminView} />)}</div> : null}
+        {items.length > 0 ? (
+          <div className="feedback-inbox">
+            <aside className="feedback-list-pane" aria-label="Feedback messages">
+              <header><span>Messages</span><strong>{items.length}</strong></header>
+              <div className="feedback-list">
+                {items.map((item) => <FeedbackListItem key={item.id} item={item} selected={item.id === selectedFeedbackId} onSelect={() => setSelectedFeedbackId(item.id)} />)}
+              </div>
+            </aside>
+            <section className="feedback-reader" aria-live="polite">
+              {selectedFeedback ? (
+                <FeedbackReader item={selectedFeedback} adminView={adminView} onClose={() => setSelectedFeedbackId(null)} onZoom={(src, alt) => setZoomedImage({ src, alt })} />
+              ) : (
+                <div className="feedback-reader-empty"><MessageSquareText /><h3>Select feedback</h3><p>Choose a message from the list to read its details.</p></div>
+              )}
+            </section>
+          </div>
+        ) : null}
       </section>
+
+      <Dialog open={Boolean(zoomedImage)} onOpenChange={(open) => !open && setZoomedImage(null)}>
+        <DialogContent className="feedback-image-dialog">
+          <DialogHeader>
+            <DialogTitle>Feedback attachment</DialogTitle>
+            <DialogDescription>Expanded image preview. Press Escape or use the close button to return.</DialogDescription>
+          </DialogHeader>
+          {zoomedImage ? <div className="feedback-image-zoom"><Image src={zoomedImage.src} alt={zoomedImage.alt} width={1280} height={1280} unoptimized /></div> : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
