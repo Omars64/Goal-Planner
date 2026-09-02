@@ -140,8 +140,10 @@ export function TodosPage() {
     setSaving(true);
     try {
       if (editing) await api.updateTask(editing.id, payload);
-      else await api.createTask(payload);
-      toast.success(editing ? "Task updated" : "Task added");
+      else {
+        await api.createTask(payload);
+        toast.success("Task added");
+      }
       setDialogOpen(false);
       await resource.reload();
     } catch (caught) {
@@ -154,10 +156,8 @@ export function TodosPage() {
   const moveTask = async (task: Task, phaseId: string) => {
     if (taskPhaseId(task, phases) === phaseId || moving === task.id) return;
     setMoving(task.id);
-    const phase = phases.find((item) => item.id === phaseId);
     try {
       await api.updateTask(task.id, { status: phaseId });
-      toast.success("Task moved", { description: `${task.title} is now in ${phase?.name ?? "the selected phase"}.` });
       await resource.reload();
     } catch (caught) {
       toast.error("Could not move task", { description: caught instanceof Error ? caught.message : "Please try again." });
@@ -178,7 +178,6 @@ export function TodosPage() {
     if (!deleting) return;
     try {
       await api.deleteTask(deleting.id);
-      toast.success("Task deleted");
       setDeleting(null);
       await resource.reload();
     } catch (caught) {
@@ -204,9 +203,6 @@ export function TodosPage() {
     try {
       if (editingPhase) await api.updateTaskPhase(editingPhase.id, phaseName);
       else await api.createTaskPhase(phaseName);
-      toast.success(editingPhase ? "Phase renamed" : "Phase added", {
-        description: editingPhase ? `The phase is now called ${phaseName}.` : `${phaseName} was added before Completed.`,
-      });
       setPhaseDialogOpen(false);
       await resource.reload();
     } catch (caught) {
@@ -221,8 +217,7 @@ export function TodosPage() {
   const removePhase = async () => {
     if (!deletingPhase) return;
     try {
-      const result = await api.deleteTaskPhase(deletingPhase.id);
-      toast.success("Phase removed", { description: result.message });
+      await api.deleteTaskPhase(deletingPhase.id);
       setDeletingPhase(null);
       await resource.reload();
     } catch (caught) {
@@ -249,7 +244,7 @@ export function TodosPage() {
       <Panel className="todo-controls">
         <div className="search-box"><Search /><Input aria-label="Search tasks" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search title, notes, or tags..." /></div>
         <Select value={priorityFilter} onValueChange={setPriorityFilter}><SelectTrigger className="priority-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All priorities</SelectItem>{["urgent", "high", "medium", "low"].map((value) => <SelectItem value={value} key={value}>{value}</SelectItem>)}</SelectContent></Select>
-        <Button variant="outline" onClick={openAddPhase}><Columns3 />Add phase</Button>
+        <Button variant="outline" onClick={openAddPhase}><Columns3 />Add</Button>
       </Panel>
 
       {resource.loading && !resource.data ? <LoadingState label="Loading Kanban board..." /> : null}
@@ -308,7 +303,7 @@ export function TodosPage() {
       </EntityDialog>
 
       <EntityDialog open={phaseDialogOpen} onOpenChange={setPhaseDialogOpen} title={editingPhase ? "Rename phase" : "Add a Kanban phase"} description={editingPhase ? "Choose a clear name for this step in your workflow." : "The new phase will appear immediately before Completed."}>
-        <form className="entity-form" onSubmit={savePhase}><Field label="Phase name"><Input required minLength={1} maxLength={40} autoFocus value={phaseName} onChange={(event) => setPhaseName(event.target.value)} placeholder="For review" /></Field><div className="dialog-actions"><Button type="button" variant="outline" onClick={() => setPhaseDialogOpen(false)}>Cancel</Button><Button className="neon-button" disabled={phaseSaving}><Columns3 />{phaseSaving ? "Saving..." : editingPhase ? "Rename phase" : "Add phase"}</Button></div></form>
+        <form className="entity-form" onSubmit={savePhase}><Field label="Phase name"><Input required minLength={1} maxLength={40} autoFocus value={phaseName} onChange={(event) => setPhaseName(event.target.value)} placeholder="For review" /></Field><div className="dialog-actions"><Button type="button" variant="outline" onClick={() => setPhaseDialogOpen(false)}>Cancel</Button><Button className="neon-button" disabled={phaseSaving}><Columns3 />{phaseSaving ? "Saving..." : editingPhase ? "Rename phase" : "Add"}</Button></div></form>
       </EntityDialog>
 
       <ConfirmDelete open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)} itemName={deleting?.title || "task"} onConfirm={remove} />
