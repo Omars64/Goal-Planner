@@ -118,9 +118,12 @@ test("ships backend, containers, CI workflows, and supplied icon", async () => {
 
 test("uses consistent Goal Planner branding in the shared shell", async () => {
   const source = await readFile(new URL("../components/planner/PlannerApp.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(source, /goal-planner-icon\.png/);
   assert.match(source, /<strong>GOAL<\/strong><span>PLANNER<\/span>/);
   assert.doesNotMatch(source, /<b>06<\/b>/);
+  assert.match(styles, /\.top-navigation button span \{[^}]*overflow-wrap: anywhere;[^}]*white-space: normal;/);
+  assert.match(styles, /@media \(max-width: 1440px\)/);
 });
 
 test("uses the configured FastAPI endpoint and durable API resources", async () => {
