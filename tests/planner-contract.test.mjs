@@ -122,7 +122,9 @@ test("uses consistent Goal Planner branding in the shared shell", async () => {
   assert.match(source, /goal-planner-icon\.png/);
   assert.match(source, /<strong>GOAL<\/strong><span>PLANNER<\/span>/);
   assert.doesNotMatch(source, /<b>06<\/b>/);
-  assert.match(styles, /\.top-navigation button span \{[^}]*overflow-wrap: anywhere;[^}]*white-space: normal;/);
+  assert.match(source, /user-navigation/);
+  assert.match(styles, /\.top-navigation button span \{[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/);
+  assert.match(styles, /\.top-navigation\.user-navigation button \{ font-size: 10px; font-weight: 700; \}/);
   assert.match(styles, /@media \(max-width: 1440px\)/);
 });
 

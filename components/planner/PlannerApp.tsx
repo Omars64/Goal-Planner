@@ -266,7 +266,7 @@ export function PlannerApp() {
           <Image src={APP_ICON} alt="" width={42} height={42} unoptimized />
           <div><strong>GOAL</strong><span>PLANNER</span></div>
         </div>
-        <nav className="top-navigation" aria-label="Planner pages">
+        <nav className={`top-navigation ${user.role === "admin" ? "admin-navigation" : "user-navigation"}`} aria-label="Planner pages">
           {navigation.map((item, index) => {
             const Icon = item.icon;
             return (

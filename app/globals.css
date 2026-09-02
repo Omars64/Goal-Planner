@@ -109,7 +109,7 @@ button:disabled { cursor: not-allowed; }
 .top-navigation::-webkit-scrollbar { display: none; }
 .top-navigation button { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; width: 72px; height: 64px; padding: 7px 5px; overflow: hidden; flex: 0 0 auto; color: #b9b5cb; background: rgba(255,255,255,.018); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; font-size: 12px; font-weight: 800; line-height: 1; letter-spacing: 0; transition: .2s ease; }
 .top-navigation button svg { width: 20px; height: 20px; }
-.top-navigation button span { display: block; width: 100%; min-width: 0; overflow-wrap: anywhere; line-height: 1.05; text-align: center; white-space: normal; }
+.top-navigation button span { display: block; width: 100%; min-width: 0; overflow: hidden; line-height: 1.05; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .top-navigation button:hover { color: white; border-color: rgba(242,84,168,.58); background: rgba(242,84,168,.08); transform: translateY(-1px); }
 .top-navigation button.active { color: white; border-color: #f254a8; background: linear-gradient(135deg, rgba(242,84,168,.22), rgba(139,92,246,.16)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 0 20px rgba(242,84,168,.12); }
 .connection-status { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 999px; color: #aaa6c2; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
@@ -738,6 +738,7 @@ button:disabled { cursor: not-allowed; }
   .app-header { gap: 12px; padding-inline: 20px; }
   .top-navigation { gap: 6px; }
   .top-navigation button { width: 62px; }
+  .top-navigation.user-navigation button { font-size: 10px; font-weight: 700; }
   .top-navigation button svg { width: 19px; height: 19px; }
   .account-chip { display: none; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
