@@ -79,6 +79,21 @@ test("uses practical task language throughout the planner", async () => {
   assert.match(source, /Priority tasks/);
 });
 
+test("uses a customizable Kanban workflow for to-do tasks", async () => {
+  const page = await readFile(new URL("../components/planner/pages/TodosPage.tsx", import.meta.url), "utf8");
+  const api = await readFile(new URL("../components/planner/api.ts", import.meta.url), "utf8");
+  const backend = await readFile(new URL("../backend/app/main.py", import.meta.url), "utf8");
+  assert.match(page, /Task Kanban board/);
+  assert.match(page, /draggable/);
+  assert.match(page, /Add phase/);
+  assert.match(page, /Rename phase/);
+  assert.match(page, /Move to next phase/);
+  assert.match(api, /createTaskPhase/);
+  assert.match(api, /deleteTaskPhase/);
+  assert.match(backend, /@app\.post\("\/api\/task-phases"/);
+  assert.match(backend, /Its tasks were moved to To do/);
+});
+
 test("ships backend, containers, CI workflows, and supplied icon", async () => {
   const files = [
     "../backend/app/main.py",

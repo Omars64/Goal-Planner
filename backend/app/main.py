@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from .auth import require_admin, require_user
 from .auth import router as auth_router
 from .database import (
+    DEFAULT_TASK_PHASES,
     DatabaseConnection,
     all_rows,
     connect,
@@ -40,6 +41,8 @@ from .schemas import (
     RoutineBlockUpdate,
     SettingsUpdate,
     TaskCreate,
+    TaskPhaseCreate,
+    TaskPhaseUpdate,
     TaskUpdate,
 )
 
@@ -226,6 +229,127 @@ def patch_settings(payload: SettingsUpdate, user: dict[str, Any] = Depends(requi
         return settings_dict(connection, user["id"])
 
 
+def task_phases_for_user(connection: DatabaseConnection, user_id: str) -> list[dict[str, Any]]:
+    row = connection.execute(
+        "SELECT value FROM user_settings WHERE user_id = ? AND key = 'task_phases'", (user_id,)
+    ).fetchone()
+    try:
+        stored = json.loads(row["value"]) if row else []
+    except (json.JSONDecodeError, TypeError):
+        stored = []
+
+    system_ids = {phase["id"] for phase in DEFAULT_TASK_PHASES}
+    custom: list[dict[str, Any]] = []
+    seen = set(system_ids)
+    if isinstance(stored, list):
+        for index, raw in enumerate(stored):
+            if not isinstance(raw, dict):
+                continue
+            phase_id = str(raw.get("id", ""))
+            name = " ".join(str(raw.get("name", "")).strip().split())
+            valid_id = phase_id.replace("_", "").replace("-", "").isalnum()
+            if not phase_id or phase_id in seen or len(phase_id) > 80 or not valid_id or not name:
+                continue
+            raw_position = raw.get("position", index + 2)
+            position = raw_position if isinstance(raw_position, int) else index + 2
+            seen.add(phase_id)
+            custom.append(
+                {
+                    "id": phase_id,
+                    "name": name[:40],
+                    "position": position,
+                    "is_done": False,
+                    "is_system": False,
+                }
+            )
+
+    custom.sort(key=lambda phase: (phase["position"], phase["name"].lower()))
+    phases = [dict(DEFAULT_TASK_PHASES[0]), dict(DEFAULT_TASK_PHASES[1]), *custom, dict(DEFAULT_TASK_PHASES[2])]
+    for position, phase in enumerate(phases):
+        phase["position"] = position
+    if not row:
+        save_task_phases(connection, user_id, phases)
+    return phases
+
+
+def save_task_phases(connection: DatabaseConnection, user_id: str, phases: list[dict[str, Any]]) -> None:
+    connection.execute(
+        """
+        INSERT INTO user_settings(user_id, key, value) VALUES (?, 'task_phases', ?)
+        ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value
+        """,
+        (user_id, json.dumps(phases)),
+    )
+
+
+def require_task_phase(connection: DatabaseConnection, user_id: str, phase_id: str) -> dict[str, Any]:
+    phase = next((item for item in task_phases_for_user(connection, user_id) if item["id"] == phase_id), None)
+    if not phase:
+        raise HTTPException(status_code=422, detail="Choose a phase that exists on your board")
+    return phase
+
+
+@app.get("/api/task-phases")
+def list_task_phases(user: dict[str, Any] = Depends(require_user)) -> list[dict[str, Any]]:
+    with transaction() as connection:
+        return task_phases_for_user(connection, user["id"])
+
+
+@app.post("/api/task-phases", status_code=201)
+def post_task_phase(payload: TaskPhaseCreate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    with transaction() as connection:
+        phases = task_phases_for_user(connection, user["id"])
+        if any(phase["name"].casefold() == payload.name.casefold() for phase in phases):
+            raise HTTPException(status_code=409, detail="A phase with this name already exists")
+        created = {
+            "id": f"phase_{new_id()}",
+            "name": payload.name,
+            "position": len(phases) - 1,
+            "is_done": False,
+            "is_system": False,
+        }
+        phases.insert(-1, created)
+        for position, phase in enumerate(phases):
+            phase["position"] = position
+        save_task_phases(connection, user["id"], phases)
+        return created
+
+
+@app.patch("/api/task-phases/{phase_id}")
+def patch_task_phase(
+    phase_id: str, payload: TaskPhaseUpdate, user: dict[str, Any] = Depends(require_user)
+) -> dict[str, Any]:
+    with transaction() as connection:
+        phases = task_phases_for_user(connection, user["id"])
+        phase = next((item for item in phases if item["id"] == phase_id), None)
+        if not phase:
+            raise HTTPException(status_code=404, detail="Phase not found")
+        if phase["is_system"]:
+            raise HTTPException(status_code=400, detail="Built-in phases cannot be renamed")
+        if any(item["id"] != phase_id and item["name"].casefold() == payload.name.casefold() for item in phases):
+            raise HTTPException(status_code=409, detail="A phase with this name already exists")
+        phase["name"] = payload.name
+        save_task_phases(connection, user["id"], phases)
+        return phase
+
+
+@app.delete("/api/task-phases/{phase_id}")
+def delete_task_phase(phase_id: str, user: dict[str, Any] = Depends(require_user)) -> dict[str, str]:
+    with transaction() as connection:
+        phases = task_phases_for_user(connection, user["id"])
+        phase = next((item for item in phases if item["id"] == phase_id), None)
+        if not phase:
+            raise HTTPException(status_code=404, detail="Phase not found")
+        if phase["is_system"]:
+            raise HTTPException(status_code=400, detail="Built-in phases cannot be deleted")
+        connection.execute(
+            "UPDATE tasks SET status = 'todo', completed_at = NULL WHERE user_id = ? AND status = ?",
+            (user["id"], phase_id),
+        )
+        save_task_phases(connection, user["id"], [item for item in phases if item["id"] != phase_id])
+        return {"message": f"{phase['name']} was removed. Its tasks were moved to To do"}
+
+
 @app.get("/api/tasks")
 def list_tasks(
     task_status: str | None = Query(default=None, alias="status"),
@@ -260,11 +384,16 @@ def list_tasks(
 
 @app.post("/api/tasks", status_code=201)
 def post_task(payload: TaskCreate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    with transaction() as connection:
+        require_task_phase(connection, user["id"], payload.status)
     return create_record("tasks", payload, user["id"])
 
 
 @app.patch("/api/tasks/{record_id}")
 def patch_task(record_id: str, payload: TaskUpdate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    if payload.status is not None:
+        with transaction() as connection:
+            require_task_phase(connection, user["id"], payload.status)
     return update_record("tasks", record_id, payload, user["id"])
 
 

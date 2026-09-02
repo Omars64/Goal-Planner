@@ -64,6 +64,41 @@ def test_task_crud_and_completion(client):
     assert client.patch(f"/api/tasks/{task['id']}", json={"priority": "low"}).status_code == 404
 
 
+def test_kanban_phases_are_customizable_and_preserve_tasks(client):
+    phases = client.get("/api/task-phases")
+    assert phases.status_code == 200
+    assert [phase["name"] for phase in phases.json()] == ["To do", "In progress", "Completed"]
+
+    created_phase = client.post("/api/task-phases", json={"name": "For review"})
+    assert created_phase.status_code == 201
+    phase_id = created_phase.json()["id"]
+    assert client.post("/api/task-phases", json={"name": "for REVIEW"}).status_code == 409
+
+    task = client.post("/api/tasks", json={"title": "Review the release", "status": phase_id})
+    assert task.status_code == 201
+    task_id = task.json()["id"]
+    assert task.json()["status"] == phase_id
+    assert client.post("/api/tasks", json={"title": "Invalid phase", "status": "missing"}).status_code == 422
+
+    completed = client.patch(f"/api/tasks/{task_id}", json={"status": "done"})
+    assert completed.status_code == 200
+    assert completed.json()["completed_at"] is not None
+    reopened = client.patch(f"/api/tasks/{task_id}", json={"status": phase_id})
+    assert reopened.status_code == 200
+    assert reopened.json()["completed_at"] is None
+
+    renamed = client.patch(f"/api/task-phases/{phase_id}", json={"name": "Quality check"})
+    assert renamed.status_code == 200
+    assert renamed.json()["name"] == "Quality check"
+    assert client.patch("/api/task-phases/todo", json={"name": "Backlog"}).status_code == 400
+    assert client.delete("/api/task-phases/done").status_code == 400
+
+    removed = client.delete(f"/api/task-phases/{phase_id}")
+    assert removed.status_code == 200
+    assert "moved to To do" in removed.json()["message"]
+    assert any(item["id"] == task_id for item in client.get("/api/tasks", params={"status": "todo"}).json())
+
+
 def test_event_validation_and_week_range(client):
     invalid = client.post(
         "/api/events",

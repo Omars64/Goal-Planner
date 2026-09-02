@@ -35,7 +35,7 @@ export interface AdminUsersResponse {
 }
 
 export type Priority = "low" | "medium" | "high" | "urgent";
-export type TaskStatus = "todo" | "in_progress" | "done" | "archived";
+export type TaskStatus = string;
 export type GoalStatus = "active" | "completed" | "paused" | "archived";
 export type Recurrence = "none" | "daily" | "weekdays" | "weekly" | "monthly";
 
@@ -53,6 +53,14 @@ export interface Task {
   recurring_rule: Recurrence;
   created_at: string;
   completed_at: string | null;
+}
+
+export interface TaskPhase {
+  id: string;
+  name: string;
+  position: number;
+  is_done: boolean;
+  is_system: boolean;
 }
 
 export interface RoutineBlock {

@@ -18,6 +18,7 @@ import type {
   RoutineInput,
   Task,
   TaskInput,
+  TaskPhase,
 } from "./types";
 
 const inferredApiUrl = (() => {
@@ -118,6 +119,10 @@ export const api = {
   createTask: (body: Partial<TaskInput>) => request<Task>("/tasks", json("POST", body)),
   updateTask: (id: string, body: Partial<TaskInput>) => request<Task>(`/tasks/${id}`, json("PATCH", body)),
   deleteTask: (id: string) => request<void>(`/tasks/${id}`, { method: "DELETE" }),
+  taskPhases: () => request<TaskPhase[]>("/task-phases"),
+  createTaskPhase: (name: string) => request<TaskPhase>("/task-phases", json("POST", { name })),
+  updateTaskPhase: (id: string, name: string) => request<TaskPhase>(`/task-phases/${id}`, json("PATCH", { name })),
+  deleteTaskPhase: (id: string) => request<{ message: string }>(`/task-phases/${id}`, { method: "DELETE" }),
 
   routineBlocks: (day?: string) => request<RoutineBlock[]>(`/routine-blocks${day ? `?day=${day}` : ""}`),
   createRoutineBlock: (body: RoutineInput) => request<RoutineBlock>("/routine-blocks", json("POST", body)),

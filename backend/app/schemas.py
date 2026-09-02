@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Priority = Literal["low", "medium", "high", "urgent"]
-TaskStatus = Literal["todo", "in_progress", "done", "archived"]
+TaskStatus = str
 GoalStatus = Literal["active", "completed", "paused", "archived"]
 Recurrence = Literal["none", "daily", "weekdays", "weekly", "monthly"]
 UserRole = Literal["admin", "user"]
@@ -111,7 +111,7 @@ class AdminPasswordReset(PatchModel):
 class TaskCreate(PatchModel):
     title: str = Field(min_length=1, max_length=180)
     notes: str = Field(default="", max_length=4000)
-    status: TaskStatus = "todo"
+    status: TaskStatus = Field(default="todo", min_length=1, max_length=80, pattern=r"^[a-zA-Z0-9_-]+$")
     priority: Priority = "medium"
     category: str = Field(default="personal", max_length=60)
     due_date: str | None = None
@@ -124,7 +124,7 @@ class TaskCreate(PatchModel):
 class TaskUpdate(PatchModel):
     title: str | None = Field(default=None, min_length=1, max_length=180)
     notes: str | None = Field(default=None, max_length=4000)
-    status: TaskStatus | None = None
+    status: TaskStatus | None = Field(default=None, min_length=1, max_length=80, pattern=r"^[a-zA-Z0-9_-]+$")
     priority: Priority | None = None
     category: str | None = Field(default=None, max_length=60)
     due_date: str | None = None
@@ -132,6 +132,22 @@ class TaskUpdate(PatchModel):
     estimate_minutes: int | None = Field(default=None, ge=0, le=1440)
     tags: list[str] | None = Field(default=None, max_length=20)
     recurring_rule: Recurrence | None = None
+
+
+class TaskPhaseCreate(PatchModel):
+    name: str = Field(min_length=1, max_length=40)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = " ".join(value.strip().split())
+        if not normalized:
+            raise ValueError("Phase name is required")
+        return normalized
+
+
+class TaskPhaseUpdate(TaskPhaseCreate):
+    pass
 
 
 class RoutineBlockCreate(PatchModel):

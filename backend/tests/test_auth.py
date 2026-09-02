@@ -335,6 +335,8 @@ def test_admin_can_delete_user_and_owned_planner_data(client: TestClient) -> Non
 
 def test_user_data_isolation(client: TestClient) -> None:
     admin_task = client.post("/api/tasks", json={"title": "Admin-only task"}).json()
+    admin_phase = client.post("/api/task-phases", json={"name": "Admin review"})
+    assert admin_phase.status_code == 201
     created = client.post(
         "/api/admin/users",
         json={
@@ -349,6 +351,8 @@ def test_user_data_isolation(client: TestClient) -> None:
         user_client.post("/api/auth/login", json={"email": "isolated@example.com", "password": "IsolatedPass123!"})
         titles = {task["title"] for task in user_client.get("/api/tasks").json()}
         assert "Admin-only task" not in titles
+        assert "Admin review" not in {phase["name"] for phase in user_client.get("/api/task-phases").json()}
+        assert user_client.post("/api/task-phases", json={"name": "Personal review"}).status_code == 201
         assert user_client.patch(f"/api/tasks/{admin_task['id']}", json={"title": "stolen"}).status_code == 404
         user_task = user_client.post("/api/tasks", json={"title": "User-only task"})
         assert user_task.status_code == 201
@@ -356,6 +360,7 @@ def test_user_data_isolation(client: TestClient) -> None:
     admin_titles = {task["title"] for task in client.get("/api/tasks").json()}
     assert "Admin-only task" in admin_titles
     assert "User-only task" not in admin_titles
+    assert "Personal review" not in {phase["name"] for phase in client.get("/api/task-phases").json()}
 
 
 def test_feedback_is_private_for_users_and_visible_to_admin(client: TestClient) -> None:

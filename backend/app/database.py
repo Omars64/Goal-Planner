@@ -288,6 +288,11 @@ CREATE INDEX IF NOT EXISTS idx_verification_codes_user ON email_verification_cod
 
 OWNED_TABLES = ["routine_blocks", "tasks", "events", "goals", "habits", "habit_entries", "reminders"]
 EMPTY_USER_WORKSPACES_MIGRATION = "2026-09-01-empty-user-workspaces"
+DEFAULT_TASK_PHASES = [
+    {"id": "todo", "name": "To do", "position": 0, "is_done": False, "is_system": True},
+    {"id": "in_progress", "name": "In progress", "position": 1, "is_done": False, "is_system": True},
+    {"id": "done", "name": "Completed", "position": 2, "is_done": True, "is_system": True},
+]
 
 
 def column_exists(connection: DatabaseConnection, table: str, column: str) -> bool:
@@ -425,6 +430,7 @@ def seed_user_settings(connection: DatabaseConnection, user_id: str, display_nam
         "notifications_enabled": False,
         "profile_image": None,
         "background_image": None,
+        "task_phases": DEFAULT_TASK_PHASES,
     }
     connection.executemany(
         """
