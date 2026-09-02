@@ -3,12 +3,14 @@ import type {
   AuthUser,
   DashboardData,
   EventInput,
+  FeedbackInput,
   Goal,
   GoalInput,
   Habit,
   HabitInput,
   InsightsData,
   PlannerEvent,
+  PlannerFeedback,
   PlannerSettings,
   Reminder,
   ReminderInput,
@@ -98,6 +100,7 @@ export const api = {
     ),
   adminDeleteUser: (id: string) =>
     request<{ message: string; deleted_user_id: string }>(`/admin/users/${id}`, { method: "DELETE" }),
+  adminFeedback: () => request<PlannerFeedback[]>("/admin/feedback"),
   dashboard: (date: string) => request<DashboardData>(`/dashboard?date=${encodeURIComponent(date)}`),
   insights: (start?: string, end?: string) => {
     const params = new URLSearchParams();
@@ -152,6 +155,9 @@ export const api = {
   createReminder: (body: ReminderInput) => request<Reminder>("/reminders", json("POST", body)),
   updateReminder: (id: string, body: Partial<ReminderInput>) => request<Reminder>(`/reminders/${id}`, json("PATCH", body)),
   deleteReminder: (id: string) => request<void>(`/reminders/${id}`, { method: "DELETE" }),
+
+  feedback: () => request<PlannerFeedback[]>("/feedback"),
+  createFeedback: (body: FeedbackInput) => request<PlannerFeedback>("/feedback", json("POST", body)),
 
   exportData: () => request<Record<string, unknown>>("/export"),
   importData: (data: Record<string, unknown>, mode: "merge" | "replace") =>

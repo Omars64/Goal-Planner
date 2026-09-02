@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .auth import require_user
+from .auth import require_admin, require_user
 from .auth import router as auth_router
 from .database import (
     DatabaseConnection,
@@ -27,6 +27,7 @@ from .database import (
 from .schemas import (
     EventCreate,
     EventUpdate,
+    FeedbackCreate,
     GoalCreate,
     GoalUpdate,
     HabitCheckIn,
@@ -490,6 +491,49 @@ def patch_reminder(
 @app.delete("/api/reminders/{record_id}", status_code=204)
 def remove_reminder(record_id: str, user: dict[str, Any] = Depends(require_user)) -> Response:
     return delete_record("reminders", record_id, user["id"])
+
+
+def feedback_rows(connection: DatabaseConnection, user_id: str | None = None) -> list[dict[str, Any]]:
+    where = "WHERE feedback.user_id = ?" if user_id else ""
+    parameters = (user_id,) if user_id else ()
+    return all_rows(
+        connection,
+        f"""
+        SELECT feedback.*, users.username AS account_username, users.email AS account_email
+        FROM feedback
+        JOIN users ON users.id = feedback.user_id
+        {where}
+        ORDER BY feedback.created_at DESC
+        """,
+        parameters,
+    )
+
+
+@app.get("/api/feedback")
+def list_feedback(user: dict[str, Any] = Depends(require_user)) -> list[dict[str, Any]]:
+    with connect() as connection:
+        return feedback_rows(connection, user["id"])
+
+
+@app.post("/api/feedback", status_code=201)
+def post_feedback(payload: FeedbackCreate, user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    feedback_id = new_id()
+    created_at = now_iso()
+    with transaction() as connection:
+        connection.execute(
+            """
+            INSERT INTO feedback(id, user_id, name, email, message, image, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (feedback_id, user["id"], payload.name, payload.email, payload.message, payload.image, created_at),
+        )
+        return feedback_rows(connection, user["id"])[0]
+
+
+@app.get("/api/admin/feedback")
+def list_admin_feedback(_: dict[str, Any] = Depends(require_admin)) -> list[dict[str, Any]]:
+    with connect() as connection:
+        return feedback_rows(connection)
 
 
 @app.get("/api/dashboard")

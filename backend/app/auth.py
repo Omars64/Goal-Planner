@@ -494,6 +494,7 @@ def delete_user(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         for table in reversed(OWNED_TABLES):
             connection.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
+        connection.execute("DELETE FROM feedback WHERE user_id = ?", (user_id,))
         connection.execute("DELETE FROM user_settings WHERE user_id = ?", (user_id,))
         connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
     return {"message": f"{row['username']} and all associated planner data were deleted", "deleted_user_id": user_id}

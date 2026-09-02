@@ -271,6 +271,13 @@ def test_admin_can_delete_user_and_owned_planner_data(client: TestClient) -> Non
             ).status_code
             == 200
         )
+        assert (
+            deleted_user_client.post(
+                "/api/feedback",
+                json={"name": "Delete Me", "email": "delete-me@example.com", "message": "Remove this too"},
+            ).status_code
+            == 201
+        )
 
     admin = client.get("/api/auth/me").json()
     assert client.delete(f"/api/admin/users/{admin['id']}").status_code == 400
@@ -304,6 +311,12 @@ def test_admin_can_delete_user_and_owned_planner_data(client: TestClient) -> Non
                 ]
                 == 0
             )
+        assert (
+            connection.execute("SELECT COUNT(*) AS count FROM feedback WHERE user_id = ?", (user_id,)).fetchone()[
+                "count"
+            ]
+            == 0
+        )
 
     assert (
         client.post(
@@ -343,6 +356,58 @@ def test_user_data_isolation(client: TestClient) -> None:
     admin_titles = {task["title"] for task in client.get("/api/tasks").json()}
     assert "Admin-only task" in admin_titles
     assert "User-only task" not in admin_titles
+
+
+def test_feedback_is_private_for_users_and_visible_to_admin(client: TestClient) -> None:
+    admin_feedback = client.post(
+        "/api/feedback",
+        json={"name": "Administrator", "email": "admin-contact@example.com", "message": "Admin note"},
+    )
+    assert admin_feedback.status_code == 201
+
+    created = client.post(
+        "/api/admin/users",
+        json={
+            "username": "Feedback User",
+            "email": "feedback-user@example.com",
+            "password": "FeedbackPass123!",
+        },
+    )
+    user_id = created.json()["user"]["id"]
+    image = "data:image/png;base64,aGVsbG8="
+
+    with TestClient(app) as user_client:
+        login = user_client.post(
+            "/api/auth/login", json={"email": "feedback-user@example.com", "password": "FeedbackPass123!"}
+        )
+        assert login.status_code == 200
+        submitted = user_client.post(
+            "/api/feedback",
+            json={
+                "name": "Feedback User",
+                "email": "reply@example.com",
+                "message": "Please add this feature",
+                "image": image,
+            },
+        )
+        assert submitted.status_code == 201
+        assert submitted.json()["user_id"] == user_id
+        assert submitted.json()["account_email"] == "feedback-user@example.com"
+        own_feedback = user_client.get("/api/feedback")
+        assert own_feedback.status_code == 200
+        assert [item["message"] for item in own_feedback.json()] == ["Please add this feature"]
+        assert user_client.get("/api/admin/feedback").status_code == 403
+
+    inbox = client.get("/api/admin/feedback")
+    assert inbox.status_code == 200
+    assert {item["message"] for item in inbox.json()} == {"Admin note", "Please add this feature"}
+    assert (
+        client.post(
+            "/api/feedback",
+            json={"name": "Admin", "email": "admin@example.com", "message": "Bad image", "image": "not-an-image"},
+        ).status_code
+        == 422
+    )
 
 
 def test_cleanup_removes_only_legacy_starter_batches(client: TestClient) -> None:

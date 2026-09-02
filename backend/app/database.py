@@ -264,11 +264,24 @@ CREATE TABLE IF NOT EXISTS reminders (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS feedback (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    message TEXT NOT NULL,
+    image TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_tasks_dates ON tasks(scheduled_date, due_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
 CREATE INDEX IF NOT EXISTS idx_habit_entries_date ON habit_entries(entry_date);
 CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(remind_at, enabled);
+CREATE INDEX IF NOT EXISTS idx_feedback_user_created ON feedback(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(token_hash, expires_at);
 CREATE INDEX IF NOT EXISTS idx_verification_codes_user ON email_verification_codes(user_id, created_at);
 """

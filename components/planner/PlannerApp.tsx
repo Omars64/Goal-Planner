@@ -14,6 +14,7 @@ import {
   LoaderCircle,
   LogOut,
   Menu,
+  MessageSquareText,
   ShieldCheck,
   Settings2,
   Wifi,
@@ -31,6 +32,7 @@ import { formatDateTime } from "./date";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { DashboardPage } from "./pages/DashboardPage";
 import { GoalsPage } from "./pages/GoalsPage";
+import { FeedbackPage } from "./pages/FeedbackPage";
 import { HabitsPage } from "./pages/HabitsPage";
 import { InsightsPage } from "./pages/InsightsPage";
 import { AdminDashboardPage } from "./pages/AdminDashboardPage";
@@ -53,6 +55,7 @@ const BASE_NAVIGATION: Array<{ key: PageKey; label: string; icon: typeof CircleG
   { key: "habits", label: "Habits", icon: HeartPulse },
   { key: "reminders", label: "Reminders", icon: Bell },
   { key: "insights", label: "Insights", icon: BarChart3 },
+  { key: "feedback", label: "Feedback", icon: MessageSquareText },
   { key: "settings", label: "Settings", icon: Settings2 },
 ];
 
@@ -114,7 +117,7 @@ export function PlannerApp() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const navigation = useMemo(() => user?.role === "admin"
-    ? [...BASE_NAVIGATION.slice(0, -1), { key: "admin" as const, label: "Admin", icon: ShieldCheck }, BASE_NAVIGATION.at(-1)!]
+    ? [...BASE_NAVIGATION.slice(0, -2), { key: "admin" as const, label: "Admin", icon: ShieldCheck }, ...BASE_NAVIGATION.slice(-2)]
     : BASE_NAVIGATION, [user?.role]);
   const activePage = navigation.find((item) => item.key === page) || navigation[0];
   const profileImage = settings?.profile_image ?? user?.profile_image;
@@ -240,6 +243,7 @@ export function PlannerApp() {
       case "reminders": return <RemindersPage />;
       case "insights": return <InsightsPage />;
       case "admin": return user?.role === "admin" ? <AdminDashboardPage currentUser={user} /> : <DashboardPage onNavigate={navigate} />;
+      case "feedback": return user ? <FeedbackPage currentUser={user} /> : null;
       case "settings": return user ? <SettingsPage currentUser={user} onSettingsChanged={setSettings} /> : null;
       default: return <DashboardPage onNavigate={navigate} />;
     }
@@ -297,9 +301,12 @@ export function PlannerApp() {
       </main>
 
       <footer className="app-footer">
-        <div><Image src={APP_ICON} alt="" width={24} height={24} unoptimized /><span>Goal Planner</span></div>
-        <span>{activePage.label} · Personal planning workspace</span>
-        <span>{online ? "Data synced by FastAPI" : "Waiting for the API"}</span>
+        <div className="footer-brand">
+          <Image src={APP_ICON} alt="" width={30} height={30} unoptimized />
+          <div className="footer-brand-copy"><strong>Goal Planner powered by Omar Solanki</strong><span>Goal Planner version 3.0</span></div>
+        </div>
+        <span className="footer-context">{activePage.label} · Personal planning workspace</span>
+        <span className="footer-sync">{online ? "Data synced by FastAPI" : "Waiting for the API"}</span>
       </footer>
 
       <div className={`mobile-nav-drawer ${mobileNavOpen ? "open" : ""}`} aria-hidden={!mobileNavOpen}>

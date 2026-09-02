@@ -4,10 +4,28 @@ import test from "node:test";
 
 test("exposes every requested top-panel planner page", async () => {
   const source = await readFile(new URL("../components/planner/PlannerApp.tsx", import.meta.url), "utf8");
-  for (const label of ["Time table", "Schedule", "To-do", "Goals", "Habits", "Reminders", "Insights", "Admin", "Settings"]) {
+  for (const label of ["Time table", "Schedule", "To-do", "Goals", "Habits", "Reminders", "Insights", "Admin", "Feedback", "Settings"]) {
     assert.match(source, new RegExp(`label: \\"${label}\\"`));
   }
   assert.match(source, /top-navigation/);
+});
+
+test("provides private user feedback history and an administrator inbox", async () => {
+  const app = await readFile(new URL("../components/planner/PlannerApp.tsx", import.meta.url), "utf8");
+  const page = await readFile(new URL("../components/planner/pages/FeedbackPage.tsx", import.meta.url), "utf8");
+  const api = await readFile(new URL("../backend/app/main.py", import.meta.url), "utf8");
+  assert.match(app, /label: "Feedback"/);
+  assert.match(page, /Previously sent feedback/);
+  assert.match(page, /adminFeedback/);
+  assert.match(page, /accept="image\/jpeg,image\/png,image\/webp"/);
+  assert.match(api, /@app\.get\("\/api\/admin\/feedback"\)/);
+  assert.match(api, /WHERE feedback\.user_id = \?/);
+});
+
+test("shows the requested product attribution and version in the footer", async () => {
+  const source = await readFile(new URL("../components/planner/PlannerApp.tsx", import.meta.url), "utf8");
+  assert.match(source, /Goal Planner powered by Omar Solanki/);
+  assert.match(source, /Goal Planner version 3\.0/);
 });
 
 test("ships verified authentication and role-gated administration", async () => {

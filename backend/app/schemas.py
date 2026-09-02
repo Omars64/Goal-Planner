@@ -287,6 +287,21 @@ class SettingsUpdate(PatchModel):
         return validated_image_data_url(value, 1_750_000)
 
 
+class FeedbackCreate(PatchModel):
+    name: str = Field(min_length=2, max_length=80)
+    email: str = Field(min_length=3, max_length=254)
+    message: str = Field(min_length=3, max_length=5000)
+    image: str | None = Field(default=None, max_length=1_400_000)
+
+    _name = field_validator("name")(normalized_username)
+    _email = field_validator("email")(normalized_email)
+
+    @field_validator("image")
+    @classmethod
+    def validate_image(cls, value: str | None) -> str | None:
+        return validated_image_data_url(value, 1_000_000)
+
+
 class ImportRequest(PatchModel):
     mode: Literal["merge", "replace"] = "merge"
     data: dict[str, Any]

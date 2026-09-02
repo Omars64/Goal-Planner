@@ -8,6 +8,7 @@ export type PageKey =
   | "reminders"
   | "insights"
   | "admin"
+  | "feedback"
   | "settings";
 
 export type UserRole = "admin" | "user";
@@ -146,6 +147,18 @@ export interface PlannerSettings {
   background_image: string | null;
 }
 
+export interface PlannerFeedback {
+  id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  message: string;
+  image: string | null;
+  created_at: string;
+  account_username: string;
+  account_email: string;
+}
+
 export interface DashboardData {
   date: string;
   day_name: string;
@@ -188,3 +201,4 @@ export type EventInput = Omit<PlannerEvent, "id" | "created_at">;
 export type GoalInput = Omit<Goal, "id" | "created_at">;
 export type HabitInput = Omit<Habit, "id" | "created_at" | "entries" | "completed_count" | "streak">;
 export type ReminderInput = Omit<Reminder, "id" | "created_at">;
+export type FeedbackInput = Pick<PlannerFeedback, "name" | "email" | "message" | "image">;
