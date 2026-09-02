@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { Clock3, ImagePlus, Inbox, LoaderCircle, Mail, MessageSquareText, Send, UserRound, X } from "lucide-react";
+import { ChevronDown, Clock3, ImageIcon, ImagePlus, Inbox, LoaderCircle, Mail, MessageSquareText, Send, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -17,23 +17,33 @@ import type { AuthUser, PlannerFeedback } from "../types";
 
 function FeedbackCard({ item, adminView }: { item: PlannerFeedback; adminView: boolean }) {
   return (
-    <article className="feedback-card">
-      <header>
-        <div className="feedback-identity">
-          <span><UserRound /></span>
-          <div>
-            <h2>{item.name}</h2>
-            <a href={`mailto:${item.email}`}><Mail />{item.email}</a>
+    <details className="feedback-card">
+      <summary>
+        <div className="feedback-summary-main">
+          <div className="feedback-identity">
+            <span><UserRound /></span>
+            <div>
+              <h2>{item.name}</h2>
+              <span className="feedback-email"><Mail />{item.email}</span>
+            </div>
           </div>
+          <p>{item.message}</p>
         </div>
-        <time dateTime={item.created_at}><Clock3 />{formatDateTime(item.created_at)}</time>
-      </header>
-      {adminView ? (
-        <div className="feedback-account"><strong>Planner account</strong><span>{item.account_username} · {item.account_email}</span></div>
-      ) : null}
-      <p>{item.message}</p>
-      {item.image ? <Image className="feedback-image" src={item.image} alt={`Attachment from ${item.name}`} width={1000} height={700} unoptimized /> : null}
-    </article>
+        <div className="feedback-summary-meta">
+          <time dateTime={item.created_at}><Clock3 />{formatDateTime(item.created_at)}</time>
+          {item.image ? <span className="feedback-attachment"><ImageIcon />Image attached</span> : null}
+          <ChevronDown className="feedback-chevron" aria-hidden="true" />
+        </div>
+      </summary>
+      <div className="feedback-card-details">
+        {adminView ? (
+          <div className="feedback-account"><strong>Planner account</strong><span>{item.account_username} · {item.account_email}</span></div>
+        ) : null}
+        <a className="feedback-detail-email" href={`mailto:${item.email}`}><Mail />Email {item.name}</a>
+        <p>{item.message}</p>
+        {item.image ? <Image className="feedback-image" src={item.image} alt={`Attachment from ${item.name}`} width={560} height={360} unoptimized /> : null}
+      </div>
+    </details>
   );
 }
 

@@ -18,6 +18,9 @@ test("provides private user feedback history and an administrator inbox", async 
   assert.match(page, /Previously sent feedback/);
   assert.match(page, /adminFeedback/);
   assert.match(page, /accept="image\/jpeg,image\/png,image\/webp"/);
+  assert.match(page, /<details className="feedback-card">/);
+  assert.match(page, /feedback-chevron/);
+  assert.match(page, /Image attached/);
   assert.match(api, /@app\.get\("\/api\/admin\/feedback"\)/);
   assert.match(api, /WHERE feedback\.user_id = \?/);
 });
