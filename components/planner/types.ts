@@ -34,6 +34,10 @@ export interface AdminUsersResponse {
   inactive_users: number;
 }
 
+export interface AuthenticatedUser extends AuthUser {
+  session_expires_at: string;
+}
+
 export type Priority = "low" | "medium" | "high" | "urgent";
 export type TaskStatus = string;
 export type GoalStatus = "active" | "completed" | "paused" | "archived";

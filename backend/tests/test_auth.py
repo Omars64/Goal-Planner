@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from conftest import ADMIN_EMAIL, ADMIN_PASSWORD
 from fastapi.testclient import TestClient
 
+from app import auth
 from app.database import (
     EMPTY_USER_WORKSPACES_MIGRATION,
     OWNED_TABLES,
@@ -14,6 +16,7 @@ from app.database import (
     transaction,
 )
 from app.main import app
+from app.security import hash_session_token
 
 
 def signup_and_verify(client: TestClient, outbox: list[dict[str, object]], email: str = "user@example.com") -> dict:
@@ -62,6 +65,8 @@ def test_signup_verification_login_and_password_change(
     )
     assert verified.status_code == 200
     assert verified.json()["user"]["role"] == "user"
+    assert "session_expires_at" in verified.json()["user"]
+    assert "Max-Age=1800" in verified.headers["set-cookie"]
     assert anonymous_client.get("/api/auth/me").json()["email"] == "new@example.com"
     dashboard = anonymous_client.get("/api/dashboard")
     assert dashboard.status_code == 200
@@ -95,6 +100,63 @@ def test_signup_verification_login_and_password_change(
         ).status_code
         == 200
     )
+
+
+@pytest.mark.parametrize("role", ["admin", "user"])
+@pytest.mark.parametrize("legacy", [False, True])
+def test_session_timeout_is_fixed_at_thirty_minutes(
+    anonymous_client: TestClient,
+    email_outbox: list[dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+    role: str,
+    legacy: bool,
+) -> None:
+    email, password = ADMIN_EMAIL, ADMIN_PASSWORD
+    if role == "user":
+        signup_and_verify(anonymous_client, email_outbox)
+        email, password = "user@example.com", "UserPass123!"
+    signed_in = anonymous_client.post("/api/auth/login", json={"email": email, "password": password})
+    assert signed_in.status_code == 200
+    assert signed_in.headers["cache-control"] == "no-store"
+    cookie = signed_in.headers["set-cookie"]
+    assert "Max-Age=1800" in cookie and "HttpOnly" in cookie and "SameSite=lax" in cookie
+    token = anonymous_client.cookies.get(auth.SESSION_COOKIE)
+    with transaction() as connection:
+        session = connection.execute(
+            "SELECT * FROM user_sessions WHERE token_hash = ?", (hash_session_token(token),)
+        ).fetchone()
+        started_at = datetime.fromisoformat(session["created_at"])
+        deadline = started_at + timedelta(minutes=30)
+        assert session["expires_at"] == deadline.isoformat()
+        if legacy:
+            connection.execute(
+                "UPDATE user_sessions SET expires_at = ? WHERE id = ?",
+                ((started_at + timedelta(days=7)).isoformat(), session["id"]),
+            )
+    assert signed_in.json()["user"]["session_expires_at"] == deadline.isoformat()
+
+    monkeypatch.setattr(auth, "now_iso", lambda: (deadline - timedelta(seconds=1)).isoformat())
+    before = anonymous_client.get("/api/auth/me")
+    assert before.status_code == 200
+    assert before.json()["session_expires_at"] == deadline.isoformat()
+    assert anonymous_client.get("/api/settings").status_code == 200
+    assert anonymous_client.get("/api/auth/me").json()["session_expires_at"] == deadline.isoformat()
+
+    monkeypatch.setattr(auth, "now_iso", lambda: deadline.isoformat())
+    for path in ("/api/auth/me", "/api/tasks", "/api/admin/users"):
+        expired = anonymous_client.get(path)
+        assert expired.status_code == 401
+        assert "expired" in expired.json()["detail"]
+        assert expired.headers["cache-control"] == "no-store"
+    assert anonymous_client.post("/api/tasks", json={"title": "Must not be created"}).status_code == 401
+    assert anonymous_client.post("/api/auth/logout").status_code == 200
+
+    reauthenticated = anonymous_client.post("/api/auth/login", json={"email": email, "password": password})
+    assert reauthenticated.status_code == 200
+    assert anonymous_client.cookies.get(auth.SESSION_COOKIE) != token
+    assert reauthenticated.json()["user"]["session_expires_at"] == (deadline + timedelta(minutes=30)).isoformat()
+    assert anonymous_client.get("/api/auth/me").status_code == 200
+    assert all(task["title"] != "Must not be created" for task in anonymous_client.get("/api/tasks").json())
 
 
 def test_resend_invalidates_old_code_and_is_rate_limited(

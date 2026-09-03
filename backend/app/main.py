@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -85,6 +86,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth_router)
+
+
+@app.middleware("http")
+async def prevent_api_caching(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 TABLE_FIELDS: dict[str, list[str]] = {

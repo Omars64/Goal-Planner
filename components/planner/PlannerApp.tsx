@@ -26,10 +26,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import { AuthScreen } from "./AuthScreen";
 import { formatDateTime } from "./date";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { watchSessionExpiry } from "./session";
 import { DashboardPage } from "./pages/DashboardPage";
 import { GoalsPage } from "./pages/GoalsPage";
 import { FeedbackPage } from "./pages/FeedbackPage";
@@ -41,7 +42,7 @@ import { SchedulePage } from "./pages/SchedulePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TimetablePage } from "./pages/TimetablePage";
 import { TodosPage } from "./pages/TodosPage";
-import type { AuthUser, PageKey, PlannerSettings, Reminder } from "./types";
+import type { AuthenticatedUser, PageKey, PlannerSettings, Reminder } from "./types";
 
 
 const APP_ICON = "/goal-planner-icon.png";
@@ -114,7 +115,8 @@ export function PlannerApp() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [online, setOnline] = useState<boolean | null>(null);
   const [settings, setSettings] = useState<PlannerSettings | null>(null);
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const navigation = useMemo(() => user?.role === "admin"
     ? [...BASE_NAVIGATION.slice(0, -2), { key: "admin" as const, label: "Admin", icon: ShieldCheck }, ...BASE_NAVIGATION.slice(-2)]
@@ -145,11 +147,32 @@ export function PlannerApp() {
   }, [navigation]);
 
   useEffect(() => {
+    let cancelled = false;
     api.me()
-      .then(setUser)
-      .catch(() => setUser(null))
-      .finally(() => setAuthLoading(false));
+      .then((currentUser) => { if (!cancelled) setUser(currentUser); })
+      .catch((caught) => {
+        if (cancelled) return;
+        setUser(null);
+        if (caught instanceof ApiError && caught.status === 401 && /expired/i.test(caught.message)) {
+          setAuthNotice("Your session has expired. Sign in again to continue.");
+        }
+      })
+      .finally(() => { if (!cancelled) setAuthLoading(false); });
+    return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    return watchSessionExpiry(user.session_expires_at, () => {
+      setUser(null);
+      setSettings(null);
+      setMobileNavOpen(false);
+      setPage("dashboard");
+      setAuthNotice("Your session has expired. Sign in again to continue.");
+      toast.dismiss();
+      window.location.hash = "";
+    });
+  }, [user]);
 
   useEffect(() => {
     const check = async () => {
@@ -167,7 +190,9 @@ export function PlannerApp() {
 
   useEffect(() => {
     if (!user || online !== true) return;
-    api.settings().then(setSettings).catch(() => undefined);
+    let cancelled = false;
+    api.settings().then((nextSettings) => { if (!cancelled) setSettings(nextSettings); }).catch(() => undefined);
+    return () => { cancelled = true; };
   }, [online, user]);
 
   useEffect(() => {
@@ -185,11 +210,14 @@ export function PlannerApp() {
 
   useEffect(() => {
     if (!user || !settings?.notifications_enabled || online !== true) return;
+    let cancelled = false;
     const checkReminders = async () => {
       try {
         const reminders = await api.reminders();
+        if (cancelled) return;
         const now = Date.now();
         for (const reminder of reminders) {
+          if (cancelled) return;
           if (!reminder.enabled || new Date(reminder.remind_at).getTime() > now) continue;
           const key = `vice-reminder:${reminder.id}:${reminder.remind_at}`;
           if (window.localStorage.getItem(key)) continue;
@@ -208,10 +236,11 @@ export function PlannerApp() {
     };
     void checkReminders();
     const interval = window.setInterval(checkReminders, 30_000);
-    return () => window.clearInterval(interval);
+    return () => { cancelled = true; window.clearInterval(interval); };
   }, [settings?.notifications_enabled, online, user]);
 
-  const authenticated = (nextUser: AuthUser, message: string) => {
+  const authenticated = (nextUser: AuthenticatedUser, message: string) => {
+    setAuthNotice(null);
     setUser(nextUser);
     setAuthLoading(false);
     setPage("dashboard");
@@ -226,6 +255,7 @@ export function PlannerApp() {
     } catch (caught) {
       toast.error("Could not complete sign out", { description: caught instanceof Error ? caught.message : "Please try again" });
     } finally {
+      setAuthNotice(null);
       setUser(null);
       setSettings(null);
       setMobileNavOpen(false);
@@ -254,7 +284,7 @@ export function PlannerApp() {
   }
 
   if (!user) {
-    return <div className="vice-app"><AuthScreen onAuthenticated={authenticated} /><PlannerToaster /></div>;
+    return <div className="vice-app"><AuthScreen onAuthenticated={authenticated} sessionNotice={authNotice} /><PlannerToaster /></div>;
   }
 
   return (

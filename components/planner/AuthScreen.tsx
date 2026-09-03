@@ -11,7 +11,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 
 import { api } from "./api";
 import { Field } from "./shared";
-import type { AuthUser } from "./types";
+import type { AuthenticatedUser } from "./types";
 
 const APP_ICON = "/goal-planner-icon.png";
 
@@ -45,7 +45,7 @@ function PasswordInput({
   );
 }
 
-export function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser, message: string) => void }) {
+export function AuthScreen({ onAuthenticated, sessionNotice }: { onAuthenticated: (user: AuthenticatedUser, message: string) => void; sessionNotice?: string | null }) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const [username, setUsername] = useState("");
@@ -123,6 +123,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUs
         <div><strong>GOAL</strong><span>PLANNER</span></div>
       </div>
       <section className="auth-panel">
+        {sessionNotice && mode === "login" && !verificationEmail ? <div className="auth-access-message" role="status"><LockKeyhole /><div><strong>Sign in again</strong><span>{sessionNotice}</span></div></div> : null}
         {verificationEmail ? (
           <>
             <div className="auth-heading"><span><MailCheck /></span><p>Secure your account</p><h1>Check your inbox</h1><small>Enter the six-digit code sent to {verificationEmail}.</small></div>

@@ -34,7 +34,7 @@ from .security import (
 router = APIRouter(prefix="/api")
 
 SESSION_COOKIE = "goal_planner_session"
-SESSION_DAYS = 7
+SESSION_MINUTES = 30
 VERIFICATION_MINUTES = 10
 VERIFICATION_MAX_ATTEMPTS = 5
 VERIFICATION_RESEND_SECONDS = 60
@@ -64,19 +64,20 @@ def user_public(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def create_session(connection: Any, user_id: str) -> tuple[str, str]:
+def create_session(connection: Any, user_id: str) -> tuple[str, str, str]:
     token = generate_session_token()
     token_hash = hash_session_token(token)
     created = now_iso()
+    expires_at = (datetime.fromisoformat(created) + timedelta(minutes=SESSION_MINUTES)).isoformat()
     session_id = new_id()
     connection.execute(
         """
         INSERT INTO user_sessions(id, user_id, token_hash, expires_at, created_at, last_seen_at)
         VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (session_id, user_id, token_hash, utc_after(days=SESSION_DAYS), created, created),
+        (session_id, user_id, token_hash, expires_at, created, created),
     )
-    return session_id, token
+    return session_id, token, expires_at
 
 
 def set_session_cookie(response: Response, token: str) -> None:
@@ -88,7 +89,7 @@ def set_session_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         SESSION_COOKIE,
         token,
-        max_age=SESSION_DAYS * 24 * 60 * 60,
+        max_age=SESSION_MINUTES * 60,
         httponly=True,
         secure=secure,
         samesite="lax",
@@ -100,19 +101,28 @@ def require_user(request: Request) -> dict[str, Any]:
     token = request.cookies.get(SESSION_COOKIE)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to continue")
+    checked_at = now_iso()
+    cutoff = (datetime.fromisoformat(checked_at) - timedelta(minutes=SESSION_MINUTES)).isoformat()
     with connect() as connection:
         row = connection.execute(
             """
-            SELECT users.*, user_sessions.id AS session_id
+            SELECT users.*, user_sessions.id AS session_id,
+                   user_sessions.expires_at AS session_expires_at,
+                   user_sessions.created_at AS session_created_at
             FROM user_sessions
             JOIN users ON users.id = user_sessions.user_id
-            WHERE user_sessions.token_hash = ? AND user_sessions.expires_at > ? AND users.is_active = 1
+            WHERE user_sessions.token_hash = ? AND user_sessions.expires_at > ?
+              AND user_sessions.created_at > ? AND users.is_active = 1
             """,
-            (hash_session_token(token), now_iso()),
+            (hash_session_token(token), checked_at, cutoff),
         ).fetchone()
     if not row:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Your session has expired. Sign in again")
-    return dict(row)
+    user = dict(row)
+    # Cap legacy seven-day sessions without touching planner data or extending a login.
+    deadline = datetime.fromisoformat(user["session_created_at"]) + timedelta(minutes=SESSION_MINUTES)
+    user["session_expires_at"] = min(user["session_expires_at"], deadline.isoformat())
+    return user
 
 
 def require_admin(user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
@@ -269,13 +279,13 @@ def verify_email(payload: VerifyEmailRequest, response: Response) -> dict[str, A
             "UPDATE email_verification_codes SET consumed_at = ? WHERE id = ?", (verified, code_row["id"])
         )
         seed_user_settings(connection, user["id"], user["username"])
-        _, token = create_session(connection, user["id"])
+        _, token, expires_at = create_session(connection, user["id"])
         updated = dict(connection.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone())
     set_session_cookie(response, token)
     return {
         "status": "verified",
         "message": "Email verified. Your empty planner is ready; start by adding your first priority",
-        "user": user_public(updated),
+        "user": {**user_public(updated), "session_expires_at": expires_at},
     }
 
 
@@ -326,10 +336,14 @@ def login(payload: LoginRequest, response: Response) -> dict[str, Any]:
             )
         logged_in = now_iso()
         connection.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (logged_in, user["id"]))
-        _, token = create_session(connection, user["id"])
+        _, token, expires_at = create_session(connection, user["id"])
         user["last_login_at"] = logged_in
     set_session_cookie(response, token)
-    return {"status": "authenticated", "message": f"Welcome back, {user['username']}", "user": user_public(user)}
+    return {
+        "status": "authenticated",
+        "message": f"Welcome back, {user['username']}",
+        "user": {**user_public(user), "session_expires_at": expires_at},
+    }
 
 
 @router.post("/auth/logout")
@@ -344,7 +358,7 @@ def logout(response: Response, request: Request) -> dict[str, str]:
 
 @router.get("/auth/me")
 def me(user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
-    return user_public(user)
+    return {**user_public(user), "session_expires_at": user["session_expires_at"]}
 
 
 @router.post("/auth/change-password")

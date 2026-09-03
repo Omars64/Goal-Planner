@@ -25,6 +25,7 @@ The project is ready to push to GitHub, test in pull requests, package as contai
 - **Insights:** 7/14/30-day charts, task completion, habit consistency, and review prompts
 - **Settings:** work profile, step goal, week start, compact layout, JSON backup/import, and starter reset
 - **Accounts:** login, email-verified signup, secure password changes, and private per-user planner data
+- **Session timeout:** all accounts must sign in again 30 minutes after login or email verification. Refreshing the page or using the app does not extend this deadline. The API also caps older sessions at 30 minutes, and the UI clears private views on expiry or when a sleeping tab resumes.
 - **Administration:** role-gated user dashboard for approved accounts, profile edits, roles, and password resets
 - **Persistence:** normalized PostgreSQL or SQLite database managed by the Python API
 - **Reliability:** error states, connectivity recovery, validation, destructive confirmations, and an error boundary

@@ -1,6 +1,7 @@
 import type {
   AdminUsersResponse,
   AuthUser,
+  AuthenticatedUser,
   DashboardData,
   EventInput,
   FeedbackInput,
@@ -20,6 +21,7 @@ import type {
   TaskInput,
   TaskPhase,
 } from "./types";
+import { SESSION_EXPIRED_EVENT } from "./session";
 
 const inferredApiUrl = (() => {
   if (typeof window === "undefined") return "/api";
@@ -47,6 +49,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     credentials: "include",
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       ...options.headers,
@@ -60,6 +63,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     } catch {
       // Keep the status-based fallback when the response is not JSON.
     }
+    if (response.status === 401 && typeof window !== "undefined" && !["/auth/login", "/auth/signup", "/auth/verify", "/auth/resend-code"].includes(path)) {
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    }
     throw new ApiError(message, response.status);
   }
   if (response.status === 204) return undefined as T;
@@ -71,16 +77,16 @@ const json = (method: string, body: unknown): RequestInit => ({ method, body: JS
 export const api = {
   baseUrl: API_BASE,
   health: () => request<{ status: string }>("/health"),
-  me: () => request<AuthUser>("/auth/me"),
+  me: () => request<AuthenticatedUser>("/auth/me"),
   login: (email: string, password: string) =>
-    request<{ status: string; message: string; user: AuthUser }>("/auth/login", json("POST", { email, password })),
+    request<{ status: string; message: string; user: AuthenticatedUser }>("/auth/login", json("POST", { email, password })),
   signup: (username: string, email: string, password: string) =>
     request<{ status: string; email: string; expires_in: number; message: string }>(
       "/auth/signup",
       json("POST", { username, email, password }),
     ),
   verifyEmail: (email: string, code: string) =>
-    request<{ status: string; message: string; user: AuthUser }>("/auth/verify", json("POST", { email, code })),
+    request<{ status: string; message: string; user: AuthenticatedUser }>("/auth/verify", json("POST", { email, code })),
   resendCode: (email: string) =>
     request<{ status: string; message: string }>("/auth/resend-code", json("POST", { email })),
   logout: () => request<{ status: string; message: string }>("/auth/logout", { method: "POST" }),
